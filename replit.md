@@ -15,25 +15,66 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Frontend**: React + Vite, Tailwind CSS, Zustand, Framer Motion, Lucide
+
+## Product: DriveApp
+
+A ride-hailing platform with two modes:
+
+### Driver Mode
+- Register vehicle details (make, model, year, plate, license number)
+- Toggle availability status (available/busy/offline)
+- View and accept/reject pending ride requests
+- Start and complete rides
+- View earnings/billing history
+
+### Client Mode
+- Request rides with pickup + drop-off locations
+- Estimated fare shown before booking (base $3 + $1.50/km)
+- Track ride status in real-time (pending → accepted → in_progress → completed)
+- View detailed invoice when ride completes
+
+## Fare Calculation
+- Base fare: $3.00
+- Rate: $1.50 per km
+- Distance calculated server-side using Haversine formula from lat/lng coordinates
 
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── drive-app/          # React + Vite frontend (DriveApp)
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+├── scripts/                # Utility scripts
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
+
+## Database Schema
+- `drivers` — registered drivers with vehicle info, status, rating
+- `rides` — ride bookings with pickup/dropoff coords, fare, status lifecycle
+- `bills` — generated invoices when rides are completed
+
+## API Routes
+- `GET /api/healthz` — health check
+- `POST /api/drivers` — register driver
+- `GET /api/drivers` — list drivers (filter by status)
+- `GET /api/drivers/:id` — get driver
+- `PATCH /api/drivers/:id` — update driver status
+- `POST /api/rides` — create ride request
+- `GET /api/rides` — list rides (filter by driverId, status)
+- `GET /api/rides/:id` — get ride
+- `PATCH /api/rides/:id/status` — update ride status (accept/start/complete/cancel)
+- `GET /api/rides/:id/billing` — get bill for a completed ride
+- `GET /api/bills` — list all bills
 
 ## TypeScript & Composite Projects
 
@@ -56,41 +97,39 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes: `src/routes/index.ts`, `health.ts`, `drivers.ts`, `rides.ts`, `billing.ts`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+
+### `artifacts/drive-app` (`@workspace/drive-app`)
+
+React + Vite frontend. Dark-mode ride-hailing UI with driver and client flows.
+
+- Pages: `Home`, `driver/Register`, `driver/Dashboard`, `client/Book`, `client/Tracker`, `shared/Invoice`
+- State: Zustand store (`use-session.ts`) for driver/client session persistence in localStorage
+- UI: Custom components (Button, Input, Card, Badge) + Lucide icons
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+Database layer using Drizzle ORM with PostgreSQL.
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+- `src/schema/drivers.ts` — drivers table
+- `src/schema/rides.ts` — rides table
+- `src/schema/bills.ts` — bills/invoices table
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
+OpenAPI 3.1 spec (`openapi.yaml`) and Orval config (`orval.config.ts`).
 
 Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client from the OpenAPI spec.
 
 ### `scripts` (`@workspace/scripts`)
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+Utility scripts package. Run scripts via `pnpm --filter @workspace/scripts run <script>`.

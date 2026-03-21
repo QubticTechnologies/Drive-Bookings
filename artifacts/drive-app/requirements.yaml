@@ -1,0 +1,20 @@
+packages:
+  "framer-motion": "For premium page transitions and micro-interactions"
+  "zustand": "For seamless global session state management (driver vs client)"
+  "clsx": "For dynamic class merging"
+  "tailwind-merge": "For reliable tailwind class overriding"
+  "lucide-react": "For beautiful consistent icons"
+  "date-fns": "For readable timestamp formatting"
+
+images:
+  - path: "artifacts/drive-app/public/images/hero-map.png"
+    description: "Abstract 3D dark mode city map rendering from top-down with glowing neon yellow-green accent routes, premium sleek tech style, dark background"
+    aspect_ratio: "16:9"
+  - path: "artifacts/drive-app/public/images/car-render.png"
+    description: "Sleek modern luxury electric sedan isolated on dark background, rim lighting with neon yellow-green accents, side profile"
+    aspect_ratio: "16:9"
+
+notes:
+  - Frontend uses local storage via Zustand for session persistence (driver vs client mode)
+  - Distance estimation is performed on the frontend using Haversine formula against generated simulated coordinates for UX display
+  - Assumes @workspace/api-client-react correctly exports all hooks defined in the prompt

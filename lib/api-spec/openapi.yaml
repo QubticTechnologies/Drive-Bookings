@@ -1,15 +1,20 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: DriveApp API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: drivers
+    description: Driver registration and management
+  - name: rides
+    description: Ride booking and management
+  - name: billing
+    description: Billing and invoices
 paths:
   /healthz:
     get:
@@ -24,6 +29,242 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /drivers:
+    post:
+      operationId: registerDriver
+      tags: [drivers]
+      summary: Register as a driver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDriverRequest"
+      responses:
+        "201":
+          description: Driver registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listDrivers
+      tags: [drivers]
+      summary: List available drivers
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [available, busy, offline]
+      responses:
+        "200":
+          description: List of drivers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Driver"
+
+  /drivers/{driverId}:
+    get:
+      operationId: getDriver
+      tags: [drivers]
+      summary: Get driver by ID
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Driver found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateDriverStatus
+      tags: [drivers]
+      summary: Update driver status
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverStatusRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+
+  /rides:
+    post:
+      operationId: createRide
+      tags: [rides]
+      summary: Request a ride (client)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRideRequest"
+      responses:
+        "201":
+          description: Ride created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ride"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listRides
+      tags: [rides]
+      summary: List rides
+      parameters:
+        - name: driverId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, in_progress, completed, cancelled]
+      responses:
+        "200":
+          description: List of rides
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ride"
+
+  /rides/{rideId}:
+    get:
+      operationId: getRide
+      tags: [rides]
+      summary: Get ride by ID
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ride found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ride"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rides/{rideId}/status:
+    patch:
+      operationId: updateRideStatus
+      tags: [rides]
+      summary: Update ride status (driver accepts, starts, completes, or cancels)
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRideStatusRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ride"
+
+  /rides/{rideId}/billing:
+    get:
+      operationId: getRideBilling
+      tags: [billing]
+      summary: Get billing details for a completed ride
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Billing details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bill"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bills:
+    get:
+      operationId: listBills
+      tags: [billing]
+      summary: List all bills
+      parameters:
+        - name: driverId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bill"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +275,277 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        licenseNumber:
+          type: string
+        vehicleMake:
+          type: string
+        vehicleModel:
+          type: string
+        vehicleYear:
+          type: integer
+        vehiclePlate:
+          type: string
+        vehicleColor:
+          type: string
+        status:
+          type: string
+          enum: [available, busy, offline]
+        rating:
+          type: number
+          format: float
+        totalRides:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - phone
+        - email
+        - licenseNumber
+        - vehicleMake
+        - vehicleModel
+        - vehicleYear
+        - vehiclePlate
+        - vehicleColor
+        - status
+        - rating
+        - totalRides
+        - createdAt
+
+    RegisterDriverRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        licenseNumber:
+          type: string
+        vehicleMake:
+          type: string
+        vehicleModel:
+          type: string
+        vehicleYear:
+          type: integer
+        vehiclePlate:
+          type: string
+        vehicleColor:
+          type: string
+      required:
+        - name
+        - phone
+        - email
+        - licenseNumber
+        - vehicleMake
+        - vehicleModel
+        - vehicleYear
+        - vehiclePlate
+        - vehicleColor
+
+    UpdateDriverStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [available, busy, offline]
+      required:
+        - status
+
+    Ride:
+      type: object
+      properties:
+        id:
+          type: integer
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        pickupLocation:
+          type: string
+        pickupLat:
+          type: number
+          format: float
+        pickupLng:
+          type: number
+          format: float
+        dropoffLocation:
+          type: string
+        dropoffLat:
+          type: number
+          format: float
+        dropoffLng:
+          type: number
+          format: float
+        distanceKm:
+          type: number
+          format: float
+        driverId:
+          type: integer
+          nullable: true
+        driver:
+          $ref: "#/components/schemas/Driver"
+          nullable: true
+        status:
+          type: string
+          enum: [pending, accepted, in_progress, completed, cancelled]
+        estimatedFare:
+          type: number
+          format: float
+        finalFare:
+          type: number
+          format: float
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - clientName
+        - clientPhone
+        - pickupLocation
+        - pickupLat
+        - pickupLng
+        - dropoffLocation
+        - dropoffLat
+        - dropoffLng
+        - distanceKm
+        - status
+        - estimatedFare
+        - createdAt
+
+    CreateRideRequest:
+      type: object
+      properties:
+        clientName:
+          type: string
+        clientPhone:
+          type: string
+        pickupLocation:
+          type: string
+        pickupLat:
+          type: number
+          format: float
+        pickupLng:
+          type: number
+          format: float
+        dropoffLocation:
+          type: string
+        dropoffLat:
+          type: number
+          format: float
+        dropoffLng:
+          type: number
+          format: float
+        notes:
+          type: string
+      required:
+        - clientName
+        - clientPhone
+        - pickupLocation
+        - pickupLat
+        - pickupLng
+        - dropoffLocation
+        - dropoffLat
+        - dropoffLng
+
+    UpdateRideStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [accepted, in_progress, completed, cancelled]
+        driverId:
+          type: integer
+      required:
+        - status
+
+    Bill:
+      type: object
+      properties:
+        id:
+          type: integer
+        rideId:
+          type: integer
+        ride:
+          $ref: "#/components/schemas/Ride"
+          nullable: true
+        driverId:
+          type: integer
+          nullable: true
+        clientName:
+          type: string
+        pickupLocation:
+          type: string
+        dropoffLocation:
+          type: string
+        distanceKm:
+          type: number
+          format: float
+        baseFare:
+          type: number
+          format: float
+        distanceFare:
+          type: number
+          format: float
+        totalFare:
+          type: number
+          format: float
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [unpaid, paid]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - rideId
+        - clientName
+        - pickupLocation
+        - dropoffLocation
+        - distanceKm
+        - baseFare
+        - distanceFare
+        - totalFare
+        - currency
+        - status
+        - createdAt
