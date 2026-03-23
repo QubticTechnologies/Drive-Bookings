@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Format currency
 export function formatCurrency(amount: number, currency: string = "USD") {
-  return new Intl.NumberNumberFormat("en-US", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
   }).format(amount);
