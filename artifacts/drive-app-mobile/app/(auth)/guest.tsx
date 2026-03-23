@@ -27,6 +27,10 @@ export default function GuestScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  const handleBack = () => {
+    router.replace("/(auth)/");
+  };
+
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGuestMode(name.trim() || "Guest");
@@ -52,17 +56,12 @@ export default function GuestScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Pressable
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(auth)/");
-          }}
-          style={styles.back}
-        >
+        {/* Back button — plain View, no animation delay blocking touches */}
+        <Pressable onPress={handleBack} style={styles.back} hitSlop={12}>
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
-        <Animated.View entering={FadeIn.duration(400)} style={styles.hero}>
+        <Animated.View entering={FadeIn.duration(300)} style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="person-outline" size={30} color={COLORS.text} />
           </View>
@@ -71,7 +70,7 @@ export default function GuestScreen() {
         </Animated.View>
 
         {/* Perks */}
-        <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.perksCard}>
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.perksCard}>
           {perks.map((p, i) => (
             <View key={p.text} style={[styles.perkRow, i < perks.length - 1 && styles.perkBorder]}>
               <View style={styles.perkIcon}>
@@ -83,7 +82,7 @@ export default function GuestScreen() {
         </Animated.View>
 
         {/* Name (optional) */}
-        <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.nameSection}>
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.nameSection}>
           <Text style={styles.label}>{t.yourName}</Text>
           <View style={styles.inputWrap}>
             <Feather name="user" size={18} color={COLORS.textSub} />
@@ -101,11 +100,8 @@ export default function GuestScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Pinned bottom buttons — always visible */}
-      <Animated.View
-        entering={FadeInDown.delay(400).springify()}
-        style={[styles.bottomBar, { paddingBottom: botPad + 16 }]}
-      >
+      {/* Pinned bottom buttons — plain View, no animation so touches are never blocked */}
+      <View style={[styles.bottomBar, { paddingBottom: botPad + 16 }]}>
         <Pressable style={styles.continueBtn} onPress={handleContinue}>
           <Ionicons name="arrow-forward-circle" size={22} color={COLORS.bg} />
           <Text style={styles.continueBtnText}>{t.continueNow}</Text>
@@ -114,7 +110,7 @@ export default function GuestScreen() {
         <Pressable style={styles.signupBtn} onPress={() => router.replace("/(auth)/phone")}>
           <Text style={styles.signupBtnText}>Create account instead</Text>
         </Pressable>
-      </Animated.View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -134,7 +130,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: COLORS.textSub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
   inputWrap: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.border },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", color: COLORS.text },
-  // Pinned bottom area
   bottomBar: { paddingHorizontal: 22, paddingTop: 12, gap: 8, backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border },
   continueBtn: { backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   continueBtnText: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: COLORS.bg },
