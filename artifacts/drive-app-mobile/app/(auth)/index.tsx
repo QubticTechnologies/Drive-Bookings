@@ -27,6 +27,43 @@ import { LANGUAGES, type Language, useI18n } from "@/contexts/i18nContext";
 
 const { height } = Dimensions.get("window");
 
+function GRLogo() {
+  const box = 52;
+  const r = 13;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View
+        style={{
+          width: box,
+          height: box,
+          borderRadius: r,
+          backgroundColor: COLORS.accentDim,
+          borderWidth: 1.5,
+          borderColor: COLORS.accent,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: 28, fontFamily: "Inter_700Bold", color: COLORS.accent, letterSpacing: -0.5 }}>G</Text>
+      </View>
+      <View
+        style={{
+          width: box,
+          height: box,
+          borderRadius: r,
+          backgroundColor: COLORS.goldDim,
+          borderWidth: 1.5,
+          borderColor: COLORS.gold,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: 28, fontFamily: "Inter_700Bold", color: COLORS.gold, letterSpacing: -0.5 }}>R</Text>
+      </View>
+    </View>
+  );
+}
+
 function LangModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { language, setLanguage, t } = useI18n();
   return (
@@ -60,7 +97,7 @@ function LangModal({ visible, onClose }: { visible: boolean; onClose: () => void
 }
 
 const modal = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.72)", justifyContent: "flex-end" },
   sheet: { backgroundColor: COLORS.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 28, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.border },
   title: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: COLORS.textSub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 20 },
   option: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14, marginBottom: 4 },
@@ -100,7 +137,7 @@ function AuthBtn({
         <View style={[styles.authBtnIcon, accent && styles.authBtnIconAccent]}>{icon}</View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.authBtnLabel, accent && { color: COLORS.bg }]}>{label}</Text>
-          {sub && <Text style={[styles.authBtnSub, accent && { color: "rgba(0,0,0,0.55)" }]}>{sub}</Text>}
+          {sub && <Text style={[styles.authBtnSub, accent && { color: "rgba(0,0,0,0.5)" }]}>{sub}</Text>}
         </View>
         <Feather name="chevron-right" size={18} color={accent ? COLORS.bg : COLORS.textMuted} />
       </Pressable>
@@ -118,22 +155,18 @@ export default function AuthWelcome() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
-    <View style={[styles.container, { paddingTop: topPad + 12, paddingBottom: botPad + 24 }]}>
+    <View style={[styles.container, { paddingTop: topPad + 8, paddingBottom: botPad + 24 }]}>
+      {/* Background gradient — Bahamas aquamarine top, gold mid-hint */}
       <LinearGradient
-        colors={["rgba(173,255,0,0.06)", "transparent"]}
+        colors={["rgba(0,194,212,0.10)", "rgba(255,199,44,0.04)", "transparent"]}
         style={styles.glow}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.6 }}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 0.55 }}
       />
 
-      {/* Top bar */}
+      {/* Top bar — just language picker */}
       <Animated.View entering={FadeIn.duration(400)} style={styles.topBar}>
-        <View style={styles.logoRow}>
-          <View style={styles.logoIcon}>
-            <Ionicons name="car-sport" size={20} color={COLORS.accent} />
-          </View>
-          <Text style={styles.logoText}>DriveApp</Text>
-        </View>
+        <View />
         <Pressable
           style={styles.langBtn}
           onPress={() => { Haptics.selectionAsync(); setLangVisible(true); }}
@@ -143,14 +176,21 @@ export default function AuthWelcome() {
         </Pressable>
       </Animated.View>
 
-      {/* Hero */}
-      <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.hero}>
+      {/* Hero — GR logo + GoRide name + tagline */}
+      <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.hero}>
+        <GRLogo />
+
+        <View style={{ marginTop: 18, marginBottom: 4 }}>
+          <Text style={styles.brandName}>GoRide</Text>
+          <Text style={styles.tagline}>
+            Go Further<Text style={{ color: COLORS.gold }}>.</Text>
+          </Text>
+        </View>
+
         <View style={styles.heroBadge}>
           <View style={styles.heroBadgeDot} />
           <Text style={styles.heroBadgeText}>Nassau, Bahamas</Text>
         </View>
-        <Text style={styles.heroTitle}>{t.welcomeTitle}</Text>
-        <Text style={styles.heroSub}>{t.welcomeSubtitle}</Text>
 
         {/* Trust badges */}
         <View style={styles.badges}>
@@ -222,26 +262,23 @@ export default function AuthWelcome() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg, paddingHorizontal: 22 },
-  glow: { position: "absolute", top: 0, left: 0, right: 0, height: height * 0.45 },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 32 },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  logoIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center" },
-  logoText: { fontSize: 18, fontFamily: "Inter_700Bold", color: COLORS.text },
+  glow: { position: "absolute", top: 0, left: 0, right: 0, height: height * 0.5 },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24 },
   langBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: COLORS.card, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border },
   langFlag: { fontSize: 18 },
-  hero: { marginBottom: 32 },
-  heroBadge: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
+  hero: { marginBottom: 28 },
+  brandName: { fontSize: 38, fontFamily: "Inter_700Bold", color: COLORS.text, letterSpacing: -1.5 },
+  tagline: { fontSize: 15, fontFamily: "Inter_400Regular", color: COLORS.textSub, letterSpacing: 0.1, marginTop: 2, marginBottom: 18 },
+  heroBadge: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 },
   heroBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.accent },
   heroBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: COLORS.accent, letterSpacing: 0.5 },
-  heroTitle: { fontSize: 40, fontFamily: "Inter_700Bold", color: COLORS.text, letterSpacing: -1.5, lineHeight: 48, marginBottom: 14 },
-  heroSub: { fontSize: 15, fontFamily: "Inter_400Regular", color: COLORS.textSub, lineHeight: 22, marginBottom: 20 },
-  badges: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  badge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: COLORS.accentDim, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "rgba(173,255,0,0.2)" },
+  badges: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  badge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: COLORS.accentDim, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "rgba(0,194,212,0.2)" },
   badgeText: { fontSize: 11, fontFamily: "Inter_500Medium", color: COLORS.accent },
   authBtns: { gap: 10 },
   authBtn: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: COLORS.card, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 16, borderWidth: 1, borderColor: COLORS.border },
   authBtnAccent: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  authBtnIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  authBtnIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center" },
   authBtnIconAccent: { backgroundColor: "rgba(0,0,0,0.12)" },
   authBtnLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: COLORS.text, marginBottom: 1 },
   authBtnSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub },

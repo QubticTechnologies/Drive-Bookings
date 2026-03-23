@@ -1,15 +1,24 @@
+// GoRide — Bahamas National Colors
+// Aquamarine #00C2D4 · Gold #FFC72C · Black #0a0f10
+
 export const COLORS = {
-  bg: "#080808",
-  card: "#111111",
-  cardElevated: "#181818",
-  border: "#1f1f1f",
-  accent: "#adff00",
-  accentDim: "rgba(173,255,0,0.12)",
-  accentGlow: "rgba(173,255,0,0.25)",
+  bg: "#050d0f",
+  card: "#0c1d21",
+  cardElevated: "#122529",
+  border: "#1a3238",
+  // Bahamas aquamarine (primary accent)
+  accent: "#00C2D4",
+  accentDim: "rgba(0,194,212,0.12)",
+  accentGlow: "rgba(0,194,212,0.28)",
+  // Bahamas gold (secondary accent)
+  gold: "#FFC72C",
+  goldDim: "rgba(255,199,44,0.14)",
+  // Text
   white: "#ffffff",
-  text: "#f0f0f0",
-  textSub: "#888888",
-  textMuted: "#555555",
+  text: "#eef5f6",
+  textSub: "#6b9aa2",
+  textMuted: "#364f55",
+  // States
   success: "#10b981",
   successDim: "rgba(16,185,129,0.15)",
   warning: "#f59e0b",
