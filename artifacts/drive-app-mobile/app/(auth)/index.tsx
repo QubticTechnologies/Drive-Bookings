@@ -122,25 +122,29 @@ function AuthBtn({
   delay: number;
 }) {
   const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  // Keep entering and useAnimatedStyle on SEPARATE Animated.Views so
+  // they never compete over the same transform property.
+  const pressAnim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const press = () => {
     scale.value = withSequence(withTiming(0.97, { duration: 70 }), withTiming(1, { duration: 70 }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
   return (
-    <Animated.View entering={FadeInDown.delay(delay).springify()} style={anim}>
-      <Pressable
-        onPress={press}
-        style={[styles.authBtn, accent && styles.authBtnAccent]}
-      >
-        <View style={[styles.authBtnIcon, accent && styles.authBtnIconAccent]}>{icon}</View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.authBtnLabel, accent && { color: COLORS.bg }]}>{label}</Text>
-          {sub && <Text style={[styles.authBtnSub, accent && { color: "rgba(0,0,0,0.5)" }]}>{sub}</Text>}
-        </View>
-        <Feather name="chevron-right" size={18} color={accent ? COLORS.bg : COLORS.textMuted} />
-      </Pressable>
+    <Animated.View entering={FadeInDown.delay(delay).springify()}>
+      <Animated.View style={pressAnim}>
+        <Pressable
+          onPress={press}
+          style={[styles.authBtn, accent && styles.authBtnAccent]}
+        >
+          <View style={[styles.authBtnIcon, accent && styles.authBtnIconAccent]}>{icon}</View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.authBtnLabel, accent && { color: COLORS.bg }]}>{label}</Text>
+            {sub && <Text style={[styles.authBtnSub, accent && { color: "rgba(0,0,0,0.5)" }]}>{sub}</Text>}
+          </View>
+          <Feather name="chevron-right" size={18} color={accent ? COLORS.bg : COLORS.textMuted} />
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -156,10 +160,10 @@ export default function AuthWelcome() {
 
   return (
     <View style={[styles.container, { paddingTop: topPad + 8, paddingBottom: botPad + 24 }]}>
-      {/* Background gradient — Bahamas aquamarine top, gold mid-hint */}
+      {/* Background gradient — never blocks touches */}
       <LinearGradient
         colors={["rgba(0,194,212,0.10)", "rgba(255,199,44,0.04)", "transparent"]}
-        style={styles.glow}
+        style={[styles.glow, { pointerEvents: "none" }]}
         start={{ x: 0.3, y: 0 }}
         end={{ x: 0.7, y: 0.55 }}
       />

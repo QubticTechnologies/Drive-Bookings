@@ -108,8 +108,9 @@ export default function OtpScreen() {
           </Text>
         </Animated.View>
 
-        {/* OTP dots display */}
-        <Animated.View entering={FadeInDown.delay(150).springify()} style={[styles.dotsRow, shakeStyle]}>
+        {/* OTP dots display — entering and shakeStyle on separate Animated.Views */}
+        <Animated.View entering={FadeInDown.delay(150).springify()}>
+        <Animated.View style={[styles.dotsRow, shakeStyle]}>
           {Array.from({ length: CODE_LEN }).map((_, i) => {
             const filled = i < code.length;
             const current = i === code.length;
@@ -128,6 +129,7 @@ export default function OtpScreen() {
               </Pressable>
             );
           })}
+        </Animated.View>
         </Animated.View>
 
         {/* Hidden input that captures keyboard */}

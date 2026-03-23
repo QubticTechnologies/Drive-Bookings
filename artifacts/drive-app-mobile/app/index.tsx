@@ -61,6 +61,7 @@ export default function RootIndex() {
           start={{ x: 0.2, y: 0 }}
           end={{ x: 0.8, y: 0.7 }}
         />
+
         <Animated.View entering={FadeIn.duration(600)} style={styles.logoWrap}>
           <GRMark size={72} />
           <Animated.View entering={FadeInDown.delay(200).springify()} style={{ alignItems: "center", marginTop: 20 }}>
