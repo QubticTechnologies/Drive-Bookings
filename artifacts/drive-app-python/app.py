@@ -279,71 +279,170 @@ def page_driver_dashboard():
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLIENT – BOOK RIDE
 # ═══════════════════════════════════════════════════════════════════════════════
+NASSAU_PLACES = {
+    "✈️  Airport & Port": [
+        ("Lynden Pindling Int'l Airport",            25.0389, -77.4659, "Main international airport"),
+        ("Nassau Cruise Port (Prince George Wharf)",  25.0811, -77.3513, "All cruise ships dock here"),
+    ],
+    "🏨  Hotels & Resorts": [
+        ("Atlantis Paradise Island",                  25.0872, -77.3149, "Iconic resort on Paradise Island"),
+        ("Baha Mar Resort (Cable Beach)",             25.0738, -77.4025, "Luxury resort complex"),
+        ("Sandals Royal Bahamian",                    25.0700, -77.3870, "Adults-only Cable Beach resort"),
+        ("British Colonial Hilton",                   25.0800, -77.3420, "Historic hotel, downtown"),
+        ("Comfort Suites Paradise Island",            25.0870, -77.3200, "Budget-friendly Paradise Island"),
+        ("Melia Nassau Beach Resort",                 25.0690, -77.3950, "Cable Beach"),
+    ],
+    "🏖️  Beaches": [
+        ("Cable Beach",                               25.0700, -77.3900, "Most popular tourist beach"),
+        ("Junkanoo Beach",                            25.0780, -77.3480, "Free beach near cruise port"),
+        ("Montagu Beach",                             25.0580, -77.3000, "Quiet local beach, east Nassau"),
+        ("Love Beach",                                25.0760, -77.4700, "Snorkelling spot, west Nassau"),
+        ("Goodman's Bay",                             25.0770, -77.3850, "Park & picnic beach"),
+    ],
+    "🏛️  Downtown Nassau": [
+        ("Parliament Square",                         25.0770, -77.3410, "City centre landmark"),
+        ("Straw Market (Bay Street)",                 25.0787, -77.3440, "Souvenirs & local crafts"),
+        ("Arawak Cay — Fish Fry",                    25.0800, -77.3600, "Best local seafood strip"),
+        ("Fort Charlotte",                            25.0790, -77.3650, "Historic fort & gardens"),
+        ("Nassau Harbour Club & Marina",              25.0820, -77.3300, "East bay waterfront"),
+    ],
+    "🏘️  Residential Areas": [
+        ("Sandyport",                                 25.0750, -77.4120, "Western gated community"),
+        ("Carmichael Road",                           25.0350, -77.4000, "South New Providence"),
+        ("Soldier Road",                              25.0500, -77.3400, "Eastern corridor"),
+        ("Village Road",                              25.0450, -77.3150, "Eastern suburbs"),
+        ("Lyford Cay",                                25.0300, -77.5300, "Exclusive western enclave"),
+    ],
+}
+
+QUICK_ROUTES = [
+    ("✈️ → 🏛️  Airport → Downtown",   "Lynden Pindling Int'l Airport",            "Parliament Square"),
+    ("🚢 → 🏨  Port → Atlantis",        "Nassau Cruise Port (Prince George Wharf)",  "Atlantis Paradise Island"),
+    ("✈️ → 🏨  Airport → Baha Mar",     "Lynden Pindling Int'l Airport",            "Baha Mar Resort (Cable Beach)"),
+    ("🚢 → 🏖️  Port → Cable Beach",    "Nassau Cruise Port (Prince George Wharf)",  "Cable Beach"),
+    ("🏖️ → 🍤  Beach → Fish Fry",      "Cable Beach",                               "Arawak Cay — Fish Fry"),
+]
+
+def _get_place_coords(name):
+    for places in NASSAU_PLACES.values():
+        for p in places:
+            if p[0] == name:
+                return p[1], p[2]
+    return 25.048, -77.355
+
+def _all_place_names():
+    names = []
+    for cat, places in NASSAU_PLACES.items():
+        names.append(f"── {cat} ──")
+        for p in places:
+            names.append(p[0])
+    return names
+
+
 def page_client_book():
-    st.markdown("## 🚖 Request a Ride")
-    st.write("Enter your details and Nassau pickup/drop-off locations.")
+    st.markdown("## 🚖 Where are you headed?")
+    st.markdown("Safe, reliable rides across Nassau — for **visitors & locals** alike. **Fares in USD.**")
 
-    NASSAU_LOCATIONS = {
-        "Lynden Pindling Int'l Airport": (25.0389, -77.4659),
-        "Cable Beach": (25.0700, -77.3900),
-        "Atlantis Paradise Island": (25.0872, -77.3149),
-        "Nassau Cruise Port": (25.0811, -77.3513),
-        "Baha Mar Resort": (25.0738, -77.4025),
-        "Downtown Nassau (Parliament Sq)": (25.0770, -77.3407),
-        "Montagu Beach": (25.0600, -77.3000),
-        "Prince Charles Drive": (25.0480, -77.3554),
-        "Shirley Street": (25.0780, -77.3380),
-        "Custom Address": None,
-    }
+    # Quick routes
+    st.markdown("**Popular Routes — click to auto-fill:**")
+    route_cols = st.columns(len(QUICK_ROUTES))
+    for i, (label, pickup, dropoff) in enumerate(QUICK_ROUTES):
+        with route_cols[i]:
+            if st.button(label, use_container_width=True, key=f"qr_{i}"):
+                st.session_state._quick_pickup = pickup
+                st.session_state._quick_dropoff = dropoff
+                st.rerun()
 
-    with st.form("book_form"):
-        st.markdown("**Your Details**")
-        c1, c2 = st.columns(2)
-        client_name = c1.text_input("Your Name", placeholder="Sarah Brown")
-        client_phone = c2.text_input("Phone Number", placeholder="+1 (242) 555-0199")
+    # Pre-fill from quick route
+    default_pickup = st.session_state.get("_quick_pickup", "Lynden Pindling Int'l Airport")
+    default_dropoff = st.session_state.get("_quick_dropoff", "Parliament Square")
 
-        st.markdown("**Trip Details**")
-        c3, c4 = st.columns(2)
-        pickup_label = c3.selectbox("Pickup Location", list(NASSAU_LOCATIONS.keys()), index=0)
-        dropoff_label = c4.selectbox("Drop-off Location", list(NASSAU_LOCATIONS.keys()), index=5)
+    all_names = _all_place_names()
+    pickup_names = [n for n in all_names if not n.startswith("──")]
+    dropoff_names = pickup_names.copy()
 
-        custom_pickup = custom_dropoff = ""
-        custom_pickup_lat = custom_pickup_lng = 25.048
-        custom_dropoff_lat = custom_dropoff_lng = 25.077
-        if pickup_label == "Custom Address":
-            custom_pickup = st.text_input("Pickup address")
-        if dropoff_label == "Custom Address":
-            custom_dropoff = st.text_input("Drop-off address")
-
-        notes = st.text_area("Notes (optional)", placeholder="e.g. I have luggage", height=80)
-        submitted = st.form_submit_button("🚖 Request Ride", use_container_width=True, type="primary")
-
-    if submitted:
-        if not client_name or not client_phone:
-            st.error("Please enter your name and phone number.")
-        elif pickup_label == dropoff_label:
-            st.error("Pickup and drop-off must be different.")
-        else:
-            p_name = custom_pickup if pickup_label == "Custom Address" else pickup_label
-            d_name = custom_dropoff if dropoff_label == "Custom Address" else dropoff_label
-            p_coords = (custom_pickup_lat, custom_pickup_lng) if pickup_label == "Custom Address" else NASSAU_LOCATIONS[pickup_label]
-            d_coords = (custom_dropoff_lat, custom_dropoff_lng) if dropoff_label == "Custom Address" else NASSAU_LOCATIONS[dropoff_label]
-
-            ride = db.create_ride(
-                client_name, client_phone,
-                p_name, p_coords[0], p_coords[1],
-                d_name, d_coords[0], d_coords[1],
-                notes,
-            )
-            st.session_state.ride_id = ride["id"]
-            st.success(f"Ride requested! Fare estimate: {db.fmt_usd(ride['estimated_fare'])} ({ride['distance_km']:.1f} km)")
-            time.sleep(1)
-            nav("client_track")
-
-    # Fare calculator preview
     st.divider()
-    st.markdown("#### 💡 Fare Estimator")
-    st.caption(f"Base fare: $3.00 + $1.50/km")
+    info_col, form_col = st.columns([1, 2])
+
+    with info_col:
+        st.markdown("#### 🌴 Welcome to Nassau")
+        st.markdown("""
+**Before you ride:**
+- 💵 All fares in US Dollars (USD)  
+- 📱 Driver will call/text when nearby  
+- 🏷️ Fare confirmed at drop-off  
+- 🧾 Invoice generated automatically  
+- 🔒 Licensed & insured drivers  
+- ⏱️ Avg wait: 5–10 minutes  
+
+**First time here?**  
+- Airport → Cable Beach: ~25 min  
+- Airport → Atlantis: ~30 min  
+- Cruise Port → Straw Market: walking distance  
+
+**Currency:** BSD = USD (1:1). USD accepted everywhere.  
+**Tipping:** Not required, but appreciated.
+        """)
+
+    with form_col:
+        with st.form("book_form"):
+            st.markdown("**Your Details**")
+            c1, c2 = st.columns(2)
+            client_name = c1.text_input("Your Name", placeholder="Sarah Brown")
+            client_phone = c2.text_input("Phone Number", placeholder="+1 (242) 555-0199",
+                                         help="Include country code if international, e.g. +44, +1")
+
+            st.markdown("**Your Trip**")
+            c3, c4 = st.columns(2)
+
+            pickup_idx = pickup_names.index(default_pickup) if default_pickup in pickup_names else 0
+            dropoff_idx = dropoff_names.index(default_dropoff) if default_dropoff in dropoff_names else 5
+
+            pickup_name  = c3.selectbox("📍 Pickup Location",  pickup_names,  index=pickup_idx)
+            dropoff_name = c4.selectbox("🏁 Drop-off Location", dropoff_names, index=dropoff_idx)
+
+            st.markdown("**Notes for your driver** *(optional)*")
+            col_notes, col_quick = st.columns([2, 1])
+            notes = col_notes.text_area("", placeholder="E.g. I'm at the south entrance with luggage…", height=90, label_visibility="collapsed")
+            with col_quick:
+                st.caption("Quick notes:")
+                quick_notes = []
+                if st.checkbox("🧳 Have luggage"):     quick_notes.append("I have luggage 🧳")
+                if st.checkbox("👶 Baby seat needed"): quick_notes.append("Baby seat needed 👶")
+                if st.checkbox("♿ Wheelchair access"): quick_notes.append("Wheelchair access needed ♿")
+                if st.checkbox("🚪 At main entrance"): quick_notes.append("I'll be at the main entrance 🚪")
+            all_notes = "\n".join(filter(None, [notes] + quick_notes))
+
+            # Live fare preview inside form
+            p_lat, p_lng = _get_place_coords(pickup_name)
+            d_lat, d_lng = _get_place_coords(dropoff_name)
+            dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
+            fare = db.calc_fare(dist)
+            fare_col1, fare_col2 = st.columns([1, 1])
+            fare_col1.metric("Estimated Fare", db.fmt_usd(fare))
+            fare_col2.metric("Distance", f"{dist:.1f} km")
+            st.caption(f"$3.00 base + ${fare - 3:.2f} distance · Final fare confirmed at drop-off")
+
+            submitted = st.form_submit_button("🚖 Request Ride Now", use_container_width=True, type="primary")
+
+        if submitted:
+            if not client_name or not client_phone:
+                st.error("Please enter your name and phone number.")
+            elif pickup_name == dropoff_name:
+                st.error("Pickup and drop-off must be different locations.")
+            else:
+                ride = db.create_ride(
+                    client_name, client_phone,
+                    pickup_name, p_lat, p_lng,
+                    dropoff_name, d_lat, d_lng,
+                    all_notes,
+                )
+                st.session_state.ride_id = ride["id"]
+                st.session_state._quick_pickup = None
+                st.session_state._quick_dropoff = None
+                st.success(f"Ride requested! Estimate: {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+                time.sleep(1)
+                nav("client_track")
 
     if st.button("← Back to Home"):
         nav("home")
