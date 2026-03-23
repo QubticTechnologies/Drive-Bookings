@@ -159,6 +159,44 @@ export interface Bill {
   createdAt: string;
 }
 
+export interface SendCodeRequest {
+  phoneNumber: string;
+}
+
+export interface SendCodeResponse {
+  message: string;
+  userId: string;
+  /** Only present in non-production environments */
+  devCode?: string;
+}
+
+export interface VerifyCodeRequest {
+  phoneNumber: string;
+  code: string;
+}
+
+export interface RiderUser {
+  id: string;
+  phoneNumber: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  userType?: string | null;
+  isVerified: boolean;
+  preferredLanguage: string;
+  profilePictureUrl?: string | null;
+  totalRides: number;
+  rating: number;
+  createdAt: string;
+}
+
+export interface UpdateUserRequest {
+  firstName?: string;
+  lastName?: string;
+  preferredLanguage?: string;
+  profilePictureUrl?: string;
+}
+
 export type ListDriversParams = {
   status?: ListDriversStatus;
 };

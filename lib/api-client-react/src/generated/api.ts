@@ -28,9 +28,14 @@ import type {
   ListRidesParams,
   RegisterDriverRequest,
   Ride,
+  RiderUser,
+  SendCodeRequest,
+  SendCodeResponse,
   UpdateDriverLocationRequest,
   UpdateDriverStatusRequest,
   UpdateRideStatusRequest,
+  UpdateUserRequest,
+  VerifyCodeRequest,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -41,6 +46,342 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * @summary Send phone verification code
+ */
+export const getSendVerificationCodeUrl = () => {
+  return `/api/users/send-code`;
+};
+
+export const sendVerificationCode = async (
+  sendCodeRequest: SendCodeRequest,
+  options?: RequestInit,
+): Promise<SendCodeResponse> => {
+  return customFetch<SendCodeResponse>(getSendVerificationCodeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(sendCodeRequest),
+  });
+};
+
+export const getSendVerificationCodeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendVerificationCode>>,
+    TError,
+    { data: BodyType<SendCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendVerificationCode>>,
+  TError,
+  { data: BodyType<SendCodeRequest> },
+  TContext
+> => {
+  const mutationKey = ["sendVerificationCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendVerificationCode>>,
+    { data: BodyType<SendCodeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return sendVerificationCode(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SendVerificationCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof sendVerificationCode>>
+>;
+export type SendVerificationCodeMutationBody = BodyType<SendCodeRequest>;
+export type SendVerificationCodeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send phone verification code
+ */
+export const useSendVerificationCode = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendVerificationCode>>,
+    TError,
+    { data: BodyType<SendCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendVerificationCode>>,
+  TError,
+  { data: BodyType<SendCodeRequest> },
+  TContext
+> => {
+  return useMutation(getSendVerificationCodeMutationOptions(options));
+};
+
+/**
+ * @summary Verify phone code and sign in
+ */
+export const getVerifyCodeUrl = () => {
+  return `/api/users/verify`;
+};
+
+export const verifyCode = async (
+  verifyCodeRequest: VerifyCodeRequest,
+  options?: RequestInit,
+): Promise<RiderUser> => {
+  return customFetch<RiderUser>(getVerifyCodeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyCodeRequest),
+  });
+};
+
+export const getVerifyCodeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyCode>>,
+    TError,
+    { data: BodyType<VerifyCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyCode>>,
+  TError,
+  { data: BodyType<VerifyCodeRequest> },
+  TContext
+> => {
+  const mutationKey = ["verifyCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyCode>>,
+    { data: BodyType<VerifyCodeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifyCode(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyCode>>
+>;
+export type VerifyCodeMutationBody = BodyType<VerifyCodeRequest>;
+export type VerifyCodeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Verify phone code and sign in
+ */
+export const useVerifyCode = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyCode>>,
+    TError,
+    { data: BodyType<VerifyCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyCode>>,
+  TError,
+  { data: BodyType<VerifyCodeRequest> },
+  TContext
+> => {
+  return useMutation(getVerifyCodeMutationOptions(options));
+};
+
+/**
+ * @summary Get user profile
+ */
+export const getGetUserUrl = (userId: string) => {
+  return `/api/users/${userId}`;
+};
+
+export const getUser = async (
+  userId: string,
+  options?: RequestInit,
+): Promise<RiderUser> => {
+  return customFetch<RiderUser>(getGetUserUrl(userId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserQueryKey = (userId: string) => {
+  return [`/api/users/${userId}`] as const;
+};
+
+export const getGetUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUser>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserQueryKey(userId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUser>>> = ({
+    signal,
+  }) => getUser(userId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!userId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetUserQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUser>>
+>;
+export type GetUserQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user profile
+ */
+
+export function useGetUser<
+  TData = Awaited<ReturnType<typeof getUser>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getUser>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserQueryOptions(userId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update user profile
+ */
+export const getUpdateUserUrl = (userId: string) => {
+  return `/api/users/${userId}`;
+};
+
+export const updateUser = async (
+  userId: string,
+  updateUserRequest: UpdateUserRequest,
+  options?: RequestInit,
+): Promise<RiderUser> => {
+  return customFetch<RiderUser>(getUpdateUserUrl(userId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateUserRequest),
+  });
+};
+
+export const getUpdateUserMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUser>>,
+    TError,
+    { userId: string; data: BodyType<UpdateUserRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateUser>>,
+  TError,
+  { userId: string; data: BodyType<UpdateUserRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateUser>>,
+    { userId: string; data: BodyType<UpdateUserRequest> }
+  > = (props) => {
+    const { userId, data } = props ?? {};
+
+    return updateUser(userId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateUser>>
+>;
+export type UpdateUserMutationBody = BodyType<UpdateUserRequest>;
+export type UpdateUserMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update user profile
+ */
+export const useUpdateUser = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateUser>>,
+    TError,
+    { userId: string; data: BodyType<UpdateUserRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateUser>>,
+  TError,
+  { userId: string; data: BodyType<UpdateUserRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateUserMutationOptions(options));
+};
 
 /**
  * Returns server health status

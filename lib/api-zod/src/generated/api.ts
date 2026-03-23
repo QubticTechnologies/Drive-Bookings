@@ -8,6 +8,96 @@
 import * as zod from "zod";
 
 /**
+ * @summary Send phone verification code
+ */
+export const SendVerificationCodeBody = zod.object({
+  phoneNumber: zod.string(),
+});
+
+export const SendVerificationCodeResponse = zod.object({
+  message: zod.string(),
+  userId: zod.string(),
+  devCode: zod
+    .string()
+    .optional()
+    .describe("Only present in non-production environments"),
+});
+
+/**
+ * @summary Verify phone code and sign in
+ */
+export const VerifyCodeBody = zod.object({
+  phoneNumber: zod.string(),
+  code: zod.string(),
+});
+
+export const VerifyCodeResponse = zod.object({
+  id: zod.string(),
+  phoneNumber: zod.string(),
+  email: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  userType: zod.string().nullish(),
+  isVerified: zod.boolean(),
+  preferredLanguage: zod.string(),
+  profilePictureUrl: zod.string().nullish(),
+  totalRides: zod.number(),
+  rating: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Get user profile
+ */
+export const GetUserParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const GetUserResponse = zod.object({
+  id: zod.string(),
+  phoneNumber: zod.string(),
+  email: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  userType: zod.string().nullish(),
+  isVerified: zod.boolean(),
+  preferredLanguage: zod.string(),
+  profilePictureUrl: zod.string().nullish(),
+  totalRides: zod.number(),
+  rating: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
+ * @summary Update user profile
+ */
+export const UpdateUserParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const UpdateUserBody = zod.object({
+  firstName: zod.string().optional(),
+  lastName: zod.string().optional(),
+  preferredLanguage: zod.string().optional(),
+  profilePictureUrl: zod.string().optional(),
+});
+
+export const UpdateUserResponse = zod.object({
+  id: zod.string(),
+  phoneNumber: zod.string(),
+  email: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  userType: zod.string().nullish(),
+  isVerified: zod.boolean(),
+  preferredLanguage: zod.string(),
+  profilePictureUrl: zod.string().nullish(),
+  totalRides: zod.number(),
+  rating: zod.number(),
+  createdAt: zod.date(),
+});
+
+/**
  * Returns server health status
  * @summary Health check
  */

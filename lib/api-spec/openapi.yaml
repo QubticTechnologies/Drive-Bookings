@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: Rider authentication and profile
   - name: drivers
     description: Driver registration and management
   - name: rides
@@ -16,6 +18,115 @@ tags:
   - name: billing
     description: Billing and invoices
 paths:
+  /users/send-code:
+    post:
+      operationId: sendVerificationCode
+      tags: [users]
+      summary: Send phone verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendCodeRequest"
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendCodeResponse"
+        "400":
+          description: Invalid phone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/verify:
+    post:
+      operationId: verifyCode
+      tags: [users]
+      summary: Verify phone code and sign in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCodeRequest"
+      responses:
+        "200":
+          description: Verified, user returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderUser"
+        "400":
+          description: Invalid code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user profile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderUser"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user profile
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiderUser"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -632,3 +743,86 @@ components:
         - currency
         - status
         - createdAt
+
+    SendCodeRequest:
+      type: object
+      properties:
+        phoneNumber:
+          type: string
+      required: [phoneNumber]
+
+    SendCodeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        userId:
+          type: string
+        devCode:
+          type: string
+          description: Only present in non-production environments
+      required: [message, userId]
+
+    VerifyCodeRequest:
+      type: object
+      properties:
+        phoneNumber:
+          type: string
+        code:
+          type: string
+      required: [phoneNumber, code]
+
+    RiderUser:
+      type: object
+      properties:
+        id:
+          type: string
+        phoneNumber:
+          type: string
+        email:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        userType:
+          type: string
+          nullable: true
+        isVerified:
+          type: boolean
+        preferredLanguage:
+          type: string
+        profilePictureUrl:
+          type: string
+          nullable: true
+        totalRides:
+          type: integer
+        rating:
+          type: number
+          format: float
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - phoneNumber
+        - isVerified
+        - preferredLanguage
+        - totalRides
+        - rating
+        - createdAt
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        preferredLanguage:
+          type: string
+        profilePictureUrl:
+          type: string
