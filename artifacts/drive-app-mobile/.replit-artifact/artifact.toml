@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "DriveApp Mobile"
+version = "1.0.0"
+id = "artifacts/drive-app-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 18465
+
+[services.development]
+run = "pnpm --filter @workspace/drive-app-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/drive-app-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/drive-app-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "18465"
+BASE_PATH = "/mobile/"
