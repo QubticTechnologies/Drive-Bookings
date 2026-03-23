@@ -46,6 +46,10 @@ export interface UpdateDriverLocationRequest {
   lng: number;
 }
 
+export interface DriverLoginRequest {
+  phone: string;
+}
+
 export interface RegisterDriverRequest {
   name: string;
   phone: string;

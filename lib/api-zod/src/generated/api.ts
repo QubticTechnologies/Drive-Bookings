@@ -16,6 +16,33 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Driver login by phone number
+ */
+export const DriverLoginBody = zod.object({
+  phone: zod.string(),
+});
+
+export const DriverLoginResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  phone: zod.string(),
+  email: zod.string(),
+  licenseNumber: zod.string(),
+  vehicleMake: zod.string(),
+  vehicleModel: zod.string(),
+  vehicleYear: zod.number(),
+  vehiclePlate: zod.string(),
+  vehicleColor: zod.string(),
+  status: zod.enum(["available", "busy", "offline"]),
+  rating: zod.number(),
+  totalRides: zod.number(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationUpdatedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
  * @summary Register as a driver
  */
 export const RegisterDriverBody = zod.object({

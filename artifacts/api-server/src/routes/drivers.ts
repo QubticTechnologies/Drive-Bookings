@@ -1,9 +1,25 @@
 import { Router, type IRouter } from "express";
 import { db, driversTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { insertDriverSchema } from "@workspace/db";
 
 const router: IRouter = Router();
+
+router.post("/drivers/login", async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone || typeof phone !== "string") {
+      return res.status(400).json({ error: "Phone number is required" });
+    }
+    const normalized = phone.trim();
+    const [driver] = await db.select().from(driversTable).where(eq(driversTable.phone, normalized));
+    if (!driver) return res.status(404).json({ error: "No driver account found with that phone number." });
+    return res.json(formatDriver(driver));
+  } catch (err) {
+    req.log.error({ err }, "Driver login failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 router.get("/drivers", async (req, res) => {
   try {

@@ -20,6 +20,7 @@ import type {
   Bill,
   CreateRideRequest,
   Driver,
+  DriverLoginRequest,
   ErrorResponse,
   HealthStatus,
   ListBillsParams,
@@ -116,6 +117,92 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Driver login by phone number
+ */
+export const getDriverLoginUrl = () => {
+  return `/api/drivers/login`;
+};
+
+export const driverLogin = async (
+  driverLoginRequest: DriverLoginRequest,
+  options?: RequestInit,
+): Promise<Driver> => {
+  return customFetch<Driver>(getDriverLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(driverLoginRequest),
+  });
+};
+
+export const getDriverLoginMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof driverLogin>>,
+    TError,
+    { data: BodyType<DriverLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof driverLogin>>,
+  TError,
+  { data: BodyType<DriverLoginRequest> },
+  TContext
+> => {
+  const mutationKey = ["driverLogin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof driverLogin>>,
+    { data: BodyType<DriverLoginRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return driverLogin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DriverLoginMutationResult = NonNullable<
+  Awaited<ReturnType<typeof driverLogin>>
+>;
+export type DriverLoginMutationBody = BodyType<DriverLoginRequest>;
+export type DriverLoginMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Driver login by phone number
+ */
+export const useDriverLogin = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof driverLogin>>,
+    TError,
+    { data: BodyType<DriverLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof driverLogin>>,
+  TError,
+  { data: BodyType<DriverLoginRequest> },
+  TContext
+> => {
+  return useMutation(getDriverLoginMutationOptions(options));
+};
 
 /**
  * @summary Register as a driver

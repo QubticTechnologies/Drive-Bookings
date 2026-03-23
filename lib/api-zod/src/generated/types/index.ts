@@ -10,6 +10,7 @@ export * from "./bill";
 export * from "./billStatus";
 export * from "./createRideRequest";
 export * from "./driver";
+export * from "./driverLoginRequest";
 export * from "./driverStatus";
 export * from "./errorResponse";
 export * from "./healthStatus";
