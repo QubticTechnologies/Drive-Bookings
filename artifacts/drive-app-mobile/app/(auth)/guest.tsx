@@ -87,9 +87,7 @@ export default function GuestScreen() {
           </View>
         </Animated.View>
 
-        <View style={{ flex: 1 }} />
-
-        <Animated.View entering={FadeInDown.delay(400).springify()} style={{ gap: 12 }}>
+        <Animated.View entering={FadeInDown.delay(400).springify()} style={{ gap: 12, marginTop: 8 }}>
           <Pressable style={styles.continueBtn} onPress={handleContinue}>
             <Ionicons name="arrow-forward-circle" size={22} color={COLORS.bg} />
             <Text style={styles.continueBtnText}>{t.continueNow}</Text>
