@@ -31,14 +31,14 @@ export default function DriverRegistration() {
 
   const [formData, setFormData] = useState({
     name: "James Smith",
-    phone: "+44 7700 900077",
+    phone: "+1 (242) 555-0144",
     email: "james.smith@example.com",
-    licenseNumber: "DRV12345678",
-    vehicleMake: "Tesla",
-    vehicleModel: "Model 3",
-    vehicleYear: "2023",
-    vehiclePlate: "LD23 XYZ",
-    vehicleColor: "Midnight Silver"
+    licenseNumber: "BS242DRV01",
+    vehicleMake: "Toyota",
+    vehicleModel: "Camry",
+    vehicleYear: "2022",
+    vehiclePlate: "NP 4821",
+    vehicleColor: "Pearl White"
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

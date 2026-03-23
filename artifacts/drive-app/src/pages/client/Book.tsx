@@ -18,9 +18,9 @@ export default function ClientBook() {
 
   const [formData, setFormData] = useState({
     clientName: clientDetails?.name || "Emma Watson",
-    clientPhone: clientDetails?.phone || "+44 7800 123456",
-    pickupLocation: "King's Cross Station, London",
-    dropoffLocation: "Heathrow Airport, London",
+    clientPhone: clientDetails?.phone || "+1 (242) 555-0198",
+    pickupLocation: "Downtown Nassau, Bay Street",
+    dropoffLocation: "Lynden Pindling International Airport",
     notes: ""
   });
 

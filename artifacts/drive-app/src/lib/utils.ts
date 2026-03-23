@@ -13,10 +13,10 @@ export function formatCurrency(amount: number, currency: string = "USD") {
   }).format(amount);
 }
 
-// Generate deterministic-ish coordinates for a location string near London
+// Generate deterministic-ish coordinates for a location string near Nassau, Bahamas
 export function simulateCoordinates(locationName: string) {
-  const baseLat = 51.5072;
-  const baseLng = -0.1276;
+  const baseLat = 25.0480;
+  const baseLng = -77.3554;
   
   // Create a pseudo-random offset based on string characters
   let hash = 0;
