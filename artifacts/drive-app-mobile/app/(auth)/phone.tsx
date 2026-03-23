@@ -71,7 +71,14 @@ export default function PhoneScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/(auth)/");
+          }}
+          hitSlop={12}
+          style={styles.back}
+        >
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
@@ -127,16 +134,14 @@ export default function PhoneScreen() {
 
         <View style={{ flex: 1 }} />
 
-        <Animated.View entering={FadeInDown.delay(400).springify()}>
-          <Pressable
-            style={[styles.sendBtn, isPending && { opacity: 0.7 }]}
-            onPress={handleSend}
-            disabled={isPending}
-          >
-            <Feather name="send" size={18} color={COLORS.bg} />
-            <Text style={styles.sendBtnText}>{isPending ? t.sending : t.sendCode}</Text>
-          </Pressable>
-        </Animated.View>
+        <Pressable
+          style={[styles.sendBtn, isPending && { opacity: 0.7 }]}
+          onPress={handleSend}
+          disabled={isPending}
+        >
+          <Feather name="send" size={18} color={COLORS.bg} />
+          <Text style={styles.sendBtnText}>{isPending ? t.sending : t.sendCode}</Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
