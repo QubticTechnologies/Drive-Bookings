@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -44,14 +45,20 @@ export default function GuestScreen() {
       style={{ flex: 1, backgroundColor: COLORS.bg }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
+      {/* Scrollable top content */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingTop: topPad + 12, paddingHorizontal: 22, paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
         <Animated.View entering={FadeIn.duration(400)} style={styles.hero}>
           <View style={styles.iconWrap}>
-            <Ionicons name="person-outline" size={36} color={COLORS.text} />
+            <Ionicons name="person-outline" size={30} color={COLORS.text} />
           </View>
           <Text style={styles.title}>{t.guestTitle}</Text>
           <Text style={styles.sub}>{t.guestSubtitle}</Text>
@@ -62,7 +69,7 @@ export default function GuestScreen() {
           {perks.map((p, i) => (
             <View key={p.text} style={[styles.perkRow, i < perks.length - 1 && styles.perkBorder]}>
               <View style={styles.perkIcon}>
-                <Ionicons name={p.icon} size={18} color={COLORS.accent} />
+                <Ionicons name={p.icon} size={16} color={COLORS.accent} />
               </View>
               <Text style={styles.perkText}>{p.text}</Text>
             </View>
@@ -86,40 +93,45 @@ export default function GuestScreen() {
             />
           </View>
         </Animated.View>
+      </ScrollView>
 
-        <Animated.View entering={FadeInDown.delay(400).springify()} style={{ gap: 12, marginTop: 8 }}>
-          <Pressable style={styles.continueBtn} onPress={handleContinue}>
-            <Ionicons name="arrow-forward-circle" size={22} color={COLORS.bg} />
-            <Text style={styles.continueBtnText}>{t.continueNow}</Text>
-          </Pressable>
+      {/* Pinned bottom buttons — always visible */}
+      <Animated.View
+        entering={FadeInDown.delay(400).springify()}
+        style={[styles.bottomBar, { paddingBottom: botPad + 16 }]}
+      >
+        <Pressable style={styles.continueBtn} onPress={handleContinue}>
+          <Ionicons name="arrow-forward-circle" size={22} color={COLORS.bg} />
+          <Text style={styles.continueBtnText}>{t.continueNow}</Text>
+        </Pressable>
 
-          <Pressable style={styles.signupBtn} onPress={() => router.replace("/(auth)/phone")}>
-            <Text style={styles.signupBtnText}>Create account instead</Text>
-          </Pressable>
-        </Animated.View>
-      </View>
+        <Pressable style={styles.signupBtn} onPress={() => router.replace("/(auth)/phone")}>
+          <Text style={styles.signupBtnText}>Create account instead</Text>
+        </Pressable>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 22 },
-  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center", marginBottom: 36 },
-  hero: { alignItems: "center", marginBottom: 32 },
-  iconWrap: { width: 72, height: 72, borderRadius: 22, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: COLORS.border },
-  title: { fontSize: 30, fontFamily: "Inter_700Bold", color: COLORS.text, letterSpacing: -0.8, textAlign: "center", marginBottom: 10 },
-  sub: { fontSize: 15, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center", lineHeight: 22 },
-  perksCard: { backgroundColor: COLORS.card, borderRadius: 20, padding: 4, borderWidth: 1, borderColor: COLORS.border, marginBottom: 28 },
-  perkRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
+  back: { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  hero: { alignItems: "center", marginBottom: 18 },
+  iconWrap: { width: 56, height: 56, borderRadius: 16, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center", marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+  title: { fontSize: 26, fontFamily: "Inter_700Bold", color: COLORS.text, letterSpacing: -0.8, textAlign: "center", marginBottom: 6 },
+  sub: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center", lineHeight: 20 },
+  perksCard: { backgroundColor: COLORS.card, borderRadius: 20, padding: 4, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
+  perkRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 11 },
   perkBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  perkIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center" },
-  perkText: { fontSize: 15, fontFamily: "Inter_400Regular", color: COLORS.text },
-  nameSection: { marginBottom: 20 },
+  perkIcon: { width: 32, height: 32, borderRadius: 9, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center" },
+  perkText: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.text },
+  nameSection: {},
   label: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: COLORS.textSub, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 },
-  inputWrap: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16, borderWidth: 1, borderColor: COLORS.border },
+  inputWrap: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: COLORS.border },
   input: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", color: COLORS.text },
-  continueBtn: { backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  // Pinned bottom area
+  bottomBar: { paddingHorizontal: 22, paddingTop: 12, gap: 8, backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border },
+  continueBtn: { backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   continueBtnText: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: COLORS.bg },
-  signupBtn: { alignItems: "center", paddingVertical: 12 },
+  signupBtn: { alignItems: "center", paddingVertical: 10 },
   signupBtnText: { fontSize: 15, fontFamily: "Inter_500Medium", color: COLORS.textSub },
 });
