@@ -6,11 +6,42 @@ import time
 import db
 
 st.set_page_config(
-    page_title="DriveApp",
+    page_title="GoRide",
     page_icon="🚖",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# ── GoRide brand CSS — Bahamas national colors ─────────────────────────────────
+st.markdown("""
+<style>
+/* Bahamas aquamarine #00C2D4 · gold #FFC72C */
+:root {
+    --gr-aqua: #00C2D4;
+    --gr-gold: #FFC72C;
+    --gr-dark: #050d0f;
+}
+/* Primary buttons → aquamarine */
+.stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primary"] {
+    background-color: var(--gr-aqua) !important;
+    border-color: var(--gr-aqua) !important;
+    color: #050d0f !important;
+    font-weight: 700 !important;
+}
+.stButton > button[kind="primary"]:hover,
+.stFormSubmitButton > button[kind="primary"]:hover {
+    background-color: #00a8b8 !important;
+    border-color: #00a8b8 !important;
+}
+/* Links & active elements */
+a { color: var(--gr-aqua) !important; }
+/* Metric delta positive */
+[data-testid="stMetricDelta"] { color: var(--gr-aqua); }
+/* Divider */
+hr { border-color: rgba(0,194,212,0.18) !important; }
+</style>
+""", unsafe_allow_html=True)
 
 ADMIN_PIN = "1234"
 NASSAU_CENTER = [25.0480, -77.3554]
@@ -45,7 +76,16 @@ def logout():
 # ── Header ────────────────────────────────────────────────────────────────────
 col_logo, col_mode, col_logout = st.columns([3, 6, 1])
 with col_logo:
-    st.markdown("## 🚖 DriveApp")
+    st.markdown("""
+<span style="display:inline-flex;align-items:center;gap:8px;line-height:1;">
+  <span style="display:inline-flex;align-items:center;gap:4px;">
+    <span style="background:rgba(0,194,212,0.15);border:1.5px solid #00C2D4;border-radius:8px;padding:2px 8px;font-size:22px;font-weight:800;color:#00C2D4;letter-spacing:-1px;">G</span>
+    <span style="background:rgba(255,199,44,0.15);border:1.5px solid #FFC72C;border-radius:8px;padding:2px 8px;font-size:22px;font-weight:800;color:#FFC72C;letter-spacing:-1px;">R</span>
+  </span>
+  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;">GoRide</span>
+</span>
+<br><span style="font-size:12px;color:#6b9aa2;letter-spacing:0.3px;">Go Further<span style="color:#FFC72C;">.</span></span>
+""", unsafe_allow_html=True)
 with col_mode:
     if st.session_state.mode == "driver":
         drv = db.get_driver(st.session_state.driver_id)
@@ -66,8 +106,12 @@ st.divider()
 # HOME
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_home():
-    st.markdown("# Move **Smarter.**")
-    st.markdown("##### Nassau's premium ride-hailing platform. Fast, safe, transparent.")
+    st.markdown("""
+<h1 style="font-size:2.4rem;font-weight:800;letter-spacing:-1px;margin-bottom:4px;">
+  Go Further<span style="color:#FFC72C;">.</span>
+</h1>
+<p style="font-size:1.05rem;color:#6b9aa2;margin-top:0;">Nassau's premier ride-hailing platform &mdash; <span style="color:#00C2D4;">safe</span>, <span style="color:#FFC72C;">fast</span>, transparent.</p>
+""", unsafe_allow_html=True)
     st.write("")
 
     col1, col2, col3 = st.columns(3)
@@ -135,7 +179,7 @@ def page_driver_register():
                 )
                 st.session_state.mode = "driver"
                 st.session_state.driver_id = driver["id"]
-                st.success(f"Welcome to DriveApp, {driver['name']}!")
+                st.success(f"Welcome to GoRide, {driver['name']}!")
                 time.sleep(1)
                 nav("driver_dashboard")
             except Exception as e:
