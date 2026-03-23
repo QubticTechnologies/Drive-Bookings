@@ -51,9 +51,44 @@ export const ListDriversResponseItem = zod.object({
   status: zod.enum(["available", "busy", "offline"]),
   rating: zod.number(),
   totalRides: zod.number(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationUpdatedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 export const ListDriversResponse = zod.array(ListDriversResponseItem);
+
+/**
+ * @summary Update driver GPS location
+ */
+export const UpdateDriverLocationParams = zod.object({
+  driverId: zod.coerce.number(),
+});
+
+export const UpdateDriverLocationBody = zod.object({
+  lat: zod.number(),
+  lng: zod.number(),
+});
+
+export const UpdateDriverLocationResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  phone: zod.string(),
+  email: zod.string(),
+  licenseNumber: zod.string(),
+  vehicleMake: zod.string(),
+  vehicleModel: zod.string(),
+  vehicleYear: zod.number(),
+  vehiclePlate: zod.string(),
+  vehicleColor: zod.string(),
+  status: zod.enum(["available", "busy", "offline"]),
+  rating: zod.number(),
+  totalRides: zod.number(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationUpdatedAt: zod.date().nullish(),
+  createdAt: zod.date(),
+});
 
 /**
  * @summary Get driver by ID
@@ -76,6 +111,9 @@ export const GetDriverResponse = zod.object({
   status: zod.enum(["available", "busy", "offline"]),
   rating: zod.number(),
   totalRides: zod.number(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationUpdatedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 
@@ -104,6 +142,9 @@ export const UpdateDriverStatusResponse = zod.object({
   status: zod.enum(["available", "busy", "offline"]),
   rating: zod.number(),
   totalRides: zod.number(),
+  lastLat: zod.number().nullish(),
+  lastLng: zod.number().nullish(),
+  lastLocationUpdatedAt: zod.date().nullish(),
   createdAt: zod.date(),
 });
 
@@ -159,6 +200,9 @@ export const ListRidesResponseItem = zod.object({
       status: zod.enum(["available", "busy", "offline"]),
       rating: zod.number(),
       totalRides: zod.number(),
+      lastLat: zod.number().nullish(),
+      lastLng: zod.number().nullish(),
+      lastLocationUpdatedAt: zod.date().nullish(),
       createdAt: zod.date(),
     })
     .nullish(),
@@ -213,6 +257,9 @@ export const GetRideResponse = zod.object({
       status: zod.enum(["available", "busy", "offline"]),
       rating: zod.number(),
       totalRides: zod.number(),
+      lastLat: zod.number().nullish(),
+      lastLng: zod.number().nullish(),
+      lastLocationUpdatedAt: zod.date().nullish(),
       createdAt: zod.date(),
     })
     .nullish(),
@@ -271,6 +318,9 @@ export const UpdateRideStatusResponse = zod.object({
       status: zod.enum(["available", "busy", "offline"]),
       rating: zod.number(),
       totalRides: zod.number(),
+      lastLat: zod.number().nullish(),
+      lastLng: zod.number().nullish(),
+      lastLocationUpdatedAt: zod.date().nullish(),
       createdAt: zod.date(),
     })
     .nullish(),
@@ -328,6 +378,9 @@ export const GetRideBillingResponse = zod.object({
           status: zod.enum(["available", "busy", "offline"]),
           rating: zod.number(),
           totalRides: zod.number(),
+          lastLat: zod.number().nullish(),
+          lastLng: zod.number().nullish(),
+          lastLocationUpdatedAt: zod.date().nullish(),
           createdAt: zod.date(),
         })
         .nullish(),
@@ -398,6 +451,9 @@ export const ListBillsResponseItem = zod.object({
           status: zod.enum(["available", "busy", "offline"]),
           rating: zod.number(),
           totalRides: zod.number(),
+          lastLat: zod.number().nullish(),
+          lastLng: zod.number().nullish(),
+          lastLocationUpdatedAt: zod.date().nullish(),
           createdAt: zod.date(),
         })
         .nullish(),

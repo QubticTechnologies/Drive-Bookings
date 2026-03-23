@@ -68,6 +68,25 @@ router.patch("/drivers/:driverId", async (req, res) => {
   }
 });
 
+router.patch("/drivers/:driverId/location", async (req, res) => {
+  try {
+    const driverId = parseInt(req.params.driverId);
+    if (isNaN(driverId)) return res.status(400).json({ error: "Invalid driver ID" });
+    const { lat, lng } = req.body;
+    if (lat == null || lng == null) return res.status(400).json({ error: "lat and lng required" });
+    const [driver] = await db
+      .update(driversTable)
+      .set({ lastLat: parseFloat(lat), lastLng: parseFloat(lng), lastLocationUpdatedAt: new Date() })
+      .where(eq(driversTable.id, driverId))
+      .returning();
+    if (!driver) return res.status(404).json({ error: "Driver not found" });
+    return res.json(formatDriver(driver));
+  } catch (err) {
+    req.log.error({ err }, "Failed to update driver location");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 function formatDriver(driver: typeof driversTable.$inferSelect) {
   return {
     id: driver.id,
@@ -83,6 +102,9 @@ function formatDriver(driver: typeof driversTable.$inferSelect) {
     status: driver.status,
     rating: driver.rating,
     totalRides: driver.totalRides,
+    lastLat: driver.lastLat ?? null,
+    lastLng: driver.lastLng ?? null,
+    lastLocationUpdatedAt: driver.lastLocationUpdatedAt ?? null,
     createdAt: driver.createdAt,
   };
 }

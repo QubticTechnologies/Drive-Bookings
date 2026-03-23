@@ -74,6 +74,31 @@ paths:
                 items:
                   $ref: "#/components/schemas/Driver"
 
+  /drivers/{driverId}/location:
+    patch:
+      operationId: updateDriverLocation
+      tags: [drivers]
+      summary: Update driver GPS location
+      parameters:
+        - name: driverId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverLocationRequest"
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+
   /drivers/{driverId}:
     get:
       operationId: getDriver
@@ -314,6 +339,18 @@ components:
           format: float
         totalRides:
           type: integer
+        lastLat:
+          type: number
+          format: float
+          nullable: true
+        lastLng:
+          type: number
+          format: float
+          nullable: true
+        lastLocationUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -332,6 +369,19 @@ components:
         - rating
         - totalRides
         - createdAt
+
+    UpdateDriverLocationRequest:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: float
+        lng:
+          type: number
+          format: float
+      required:
+        - lat
+        - lng
 
     RegisterDriverRequest:
       type: object

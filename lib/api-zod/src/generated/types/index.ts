@@ -21,6 +21,7 @@ export * from "./listRidesStatus";
 export * from "./registerDriverRequest";
 export * from "./ride";
 export * from "./rideStatus";
+export * from "./updateDriverLocationRequest";
 export * from "./updateDriverStatusRequest";
 export * from "./updateDriverStatusRequestStatus";
 export * from "./updateRideStatusRequest";

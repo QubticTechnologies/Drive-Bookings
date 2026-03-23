@@ -27,6 +27,7 @@ import type {
   ListRidesParams,
   RegisterDriverRequest,
   Ride,
+  UpdateDriverLocationRequest,
   UpdateDriverStatusRequest,
   UpdateRideStatusRequest,
 } from "./api.schemas";
@@ -295,6 +296,94 @@ export function useListDrivers<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update driver GPS location
+ */
+export const getUpdateDriverLocationUrl = (driverId: number) => {
+  return `/api/drivers/${driverId}/location`;
+};
+
+export const updateDriverLocation = async (
+  driverId: number,
+  updateDriverLocationRequest: UpdateDriverLocationRequest,
+  options?: RequestInit,
+): Promise<Driver> => {
+  return customFetch<Driver>(getUpdateDriverLocationUrl(driverId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDriverLocationRequest),
+  });
+};
+
+export const getUpdateDriverLocationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDriverLocation>>,
+    TError,
+    { driverId: number; data: BodyType<UpdateDriverLocationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDriverLocation>>,
+  TError,
+  { driverId: number; data: BodyType<UpdateDriverLocationRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateDriverLocation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDriverLocation>>,
+    { driverId: number; data: BodyType<UpdateDriverLocationRequest> }
+  > = (props) => {
+    const { driverId, data } = props ?? {};
+
+    return updateDriverLocation(driverId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDriverLocationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDriverLocation>>
+>;
+export type UpdateDriverLocationMutationBody =
+  BodyType<UpdateDriverLocationRequest>;
+export type UpdateDriverLocationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update driver GPS location
+ */
+export const useUpdateDriverLocation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDriverLocation>>,
+    TError,
+    { driverId: number; data: BodyType<UpdateDriverLocationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDriverLocation>>,
+  TError,
+  { driverId: number; data: BodyType<UpdateDriverLocationRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateDriverLocationMutationOptions(options));
+};
 
 /**
  * @summary Get driver by ID

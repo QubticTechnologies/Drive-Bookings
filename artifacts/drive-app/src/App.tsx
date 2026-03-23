@@ -4,13 +4,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
-// Page Imports
 import Home from "@/pages/Home";
 import DriverRegistration from "@/pages/driver/Register";
 import DriverDashboard from "@/pages/driver/Dashboard";
 import ClientBook from "@/pages/client/Book";
 import ClientRideTracker from "@/pages/client/Tracker";
 import Invoice from "@/pages/shared/Invoice";
+import OfficeDashboard from "@/pages/office/Dashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +30,7 @@ function Router() {
       <Route path="/client/book" component={ClientBook} />
       <Route path="/client/ride/:id" component={ClientRideTracker} />
       <Route path="/bill/:id" component={Invoice} />
+      <Route path="/office/dashboard" component={OfficeDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

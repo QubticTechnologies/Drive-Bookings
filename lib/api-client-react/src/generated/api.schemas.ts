@@ -35,7 +35,15 @@ export interface Driver {
   status: DriverStatus;
   rating: number;
   totalRides: number;
+  lastLat?: number | null;
+  lastLng?: number | null;
+  lastLocationUpdatedAt?: string | null;
   createdAt: string;
+}
+
+export interface UpdateDriverLocationRequest {
+  lat: number;
+  lng: number;
 }
 
 export interface RegisterDriverRequest {

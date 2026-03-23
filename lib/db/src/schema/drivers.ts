@@ -18,6 +18,9 @@ export const driversTable = pgTable("drivers", {
   status: driverStatusEnum("status").notNull().default("available"),
   rating: real("rating").notNull().default(5.0),
   totalRides: integer("total_rides").notNull().default(0),
+  lastLat: real("last_lat"),
+  lastLng: real("last_lng"),
+  lastLocationUpdatedAt: timestamp("last_location_updated_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

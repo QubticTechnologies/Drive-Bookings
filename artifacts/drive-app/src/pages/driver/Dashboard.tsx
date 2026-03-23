@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { Power, MapPin, Navigation, CheckCircle, Clock } from "lucide-react";
@@ -8,6 +8,7 @@ import {
   useUpdateDriverStatus, 
   useListRides, 
   useUpdateRideStatus,
+  useUpdateDriverLocation,
   UpdateDriverStatusRequestStatus,
   UpdateRideStatusRequestStatus,
   Ride
@@ -48,6 +49,29 @@ export default function DriverDashboard() {
   const updateRideMutation = useUpdateRideStatus({
     mutation: { onSuccess: () => { refetchRides(); } }
   });
+
+  const locationMutation = useUpdateDriverLocation();
+  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Broadcast simulated GPS location every 5s when on a ride
+  useEffect(() => {
+    if (!driverId) return;
+    if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+
+    const broadcastLocation = () => {
+      // Simulate movement around Nassau
+      const baseLat = 25.048 + (Math.random() - 0.5) * 0.08;
+      const baseLng = -77.355 + (Math.random() - 0.5) * 0.12;
+      locationMutation.mutate({ driverId: driverId as number, data: { lat: baseLat, lng: baseLng } });
+    };
+
+    broadcastLocation(); // Immediately on mount
+    locationIntervalRef.current = setInterval(broadcastLocation, 5000);
+
+    return () => {
+      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+    };
+  }, [driverId]);
 
   if (!driver) return <Layout><div className="flex justify-center p-20"><span className="animate-pulse">Loading dashboard...</span></div></Layout>;
 
