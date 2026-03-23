@@ -52,7 +52,13 @@ export default function GuestScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/(auth)/");
+          }}
+          style={styles.back}
+        >
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
