@@ -15,15 +15,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatCurrency } from "@/lib/utils";
-
-// Nassau bounding box for the live map
-const MAP_BOUNDS = { minLat: 24.98, maxLat: 25.18, minLng: -77.55, maxLng: -77.20 };
-
-function toMapPercent(lat: number, lng: number) {
-  const x = ((lng - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * 100;
-  const y = ((MAP_BOUNDS.maxLat - lat) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * 100;
-  return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
-}
+import LiveMap from "@/components/LiveMap";
 
 function statusColor(status: string) {
   switch (status) {
@@ -69,11 +61,6 @@ export default function OfficeDashboard() {
     });
   };
 
-  // Drivers with known location
-  const mappedDrivers = drivers.filter((d) => d.lastLat != null && d.lastLng != null);
-  // Default Nassau position for drivers without location
-  const defaultPos = toMapPercent(25.048, -77.355);
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -104,75 +91,7 @@ export default function OfficeDashboard() {
               <MapPin className="w-5 h-5 text-primary" /> Live Driver Map
               <span className="text-xs font-normal text-muted-foreground ml-2 animate-pulse">● Updating every 4s</span>
             </h2>
-            <div className="relative w-full h-[420px] rounded-2xl overflow-hidden border border-white/10 bg-[#0d1117]">
-              {/* Grid lines for map feel */}
-              <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#4ade80" strokeWidth="0.5" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-              </svg>
-
-              {/* Nassau label */}
-              <div className="absolute bottom-3 left-4 text-xs text-muted-foreground font-mono opacity-60">
-                Nassau, NP · Bahamas
-              </div>
-
-              {/* Driver dots */}
-              {drivers.map((driver) => {
-                const lat = driver.lastLat ?? (25.048 + (driver.id * 0.003) % 0.12 - 0.06);
-                const lng = driver.lastLng ?? (-77.355 + (driver.id * 0.007) % 0.20 - 0.10);
-                const pos = toMapPercent(lat, lng);
-                return (
-                  <motion.div
-                    key={driver.id}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 z-10 group cursor-pointer"
-                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                    animate={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                    transition={{ duration: 1.5, ease: "easeInOut" }}
-                  >
-                    {/* Pulse ring for available drivers */}
-                    {driver.status === "available" && (
-                      <div className="absolute inset-0 -m-2 rounded-full bg-emerald-500/20 animate-ping" />
-                    )}
-                    <div className={`w-4 h-4 rounded-full border-2 border-card ${statusColor(driver.status)}`} />
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-20 w-max">
-                      <div className="bg-card border border-white/10 rounded-xl px-3 py-2 text-xs shadow-xl">
-                        <div className="font-bold">{driver.name}</div>
-                        <div className="text-muted-foreground">{driver.vehiclePlate} · {driver.vehicleColor} {driver.vehicleMake}</div>
-                        <div className="mt-1">
-                          <Badge className={`text-[10px] py-0 ${driver.status === "available" ? "bg-emerald-500/20 text-emerald-400" : driver.status === "busy" ? "bg-amber-400/20 text-amber-400" : "bg-zinc-700 text-zinc-400"}`}>
-                            {driver.status}
-                          </Badge>
-                        </div>
-                        {driver.lastLocationUpdatedAt && (
-                          <div className="text-muted-foreground mt-1">
-                            Updated {format(new Date(driver.lastLocationUpdatedAt), "HH:mm:ss")}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-
-              {/* Legend */}
-              <div className="absolute top-3 right-3 flex flex-col gap-1.5 bg-card/80 backdrop-blur rounded-xl p-2.5 border border-white/5 text-xs">
-                {[
-                  { color: "bg-emerald-500", label: "Available" },
-                  { color: "bg-amber-400", label: "Busy" },
-                  { color: "bg-zinc-500", label: "Offline" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                    <span className="text-muted-foreground">{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <LiveMap drivers={drivers} className="w-full h-[440px]" />
 
             {/* Driver List */}
             <h2 className="text-lg font-display font-bold mt-4">Fleet</h2>
