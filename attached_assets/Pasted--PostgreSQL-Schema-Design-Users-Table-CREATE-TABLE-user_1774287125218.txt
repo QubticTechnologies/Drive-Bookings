@@ -1,0 +1,166 @@
+-- PostgreSQL Schema Design
+
+-- Users Table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone_number VARCHAR(20) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    user_type VARCHAR(20) CHECK (user_type IN ('rider', 'driver', 'both')),
+    is_verified BOOLEAN DEFAULT FALSE,
+    verification_code VARCHAR(6),
+    rating DECIMAL(3,2) DEFAULT 5.0,
+    total_rides INTEGER DEFAULT 0,
+    profile_picture_url TEXT,
+    preferred_language VARCHAR(10) DEFAULT 'en',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+);
+
+-- Drivers Table
+CREATE TABLE drivers (
+    id UUID PRIMARY KEY REFERENCES users(id),
+    license_number VARCHAR(50) UNIQUE NOT NULL,
+    taxi_permit_number VARCHAR(50) UNIQUE NOT NULL,
+    national_id VARCHAR(50) NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('pending', 'active', 'suspended', 'inactive')),
+    is_online BOOLEAN DEFAULT FALSE,
+    current_latitude DECIMAL(10,8),
+    current_longitude DECIMAL(11,8),
+    last_location_update TIMESTAMP,
+    vehicle_id UUID REFERENCES vehicles(id),
+    bank_account_number VARCHAR(50),
+    bank_name VARCHAR(100),
+    payout_method VARCHAR(20) DEFAULT 'bank_transfer',
+    average_rating DECIMAL(3,2) DEFAULT 5.0,
+    total_earnings DECIMAL(10,2) DEFAULT 0,
+    acceptance_rate DECIMAL(5,2) DEFAULT 100,
+    cancellation_rate DECIMAL(5,2) DEFAULT 0,
+    documents_verified BOOLEAN DEFAULT FALSE,
+    background_check_completed BOOLEAN DEFAULT FALSE,
+    insurance_expiry DATE,
+    license_expiry DATE,
+    permit_expiry DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Vehicles Table
+CREATE TABLE vehicles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    driver_id UUID REFERENCES drivers(id),
+    make VARCHAR(50),
+    model VARCHAR(50),
+    year INTEGER,
+    color VARCHAR(30),
+    license_plate VARCHAR(20) UNIQUE NOT NULL,
+    vehicle_type VARCHAR(20) CHECK (vehicle_type IN ('standard', 'premium', 'van', 'luxury')),
+    seat_capacity INTEGER DEFAULT 4,
+    luggage_capacity INTEGER DEFAULT 2,
+    is_airport_approved BOOLEAN DEFAULT FALSE,
+    is_cruise_port_approved BOOLEAN DEFAULT FALSE,
+    vehicle_photo_url TEXT,
+    registration_document_url TEXT,
+    insurance_document_url TEXT,
+    inspection_certificate_url TEXT,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Rides Table
+CREATE TABLE rides (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rider_id UUID REFERENCES users(id),
+    driver_id UUID REFERENCES drivers(id),
+    status VARCHAR(20) CHECK (status IN ('requested', 'accepted', 'arrived', 'started', 'completed', 'cancelled', 'no_show')),
+    ride_type VARCHAR(20) DEFAULT 'standard',
+    
+    -- Location Data
+    pickup_latitude DECIMAL(10,8) NOT NULL,
+    pickup_longitude DECIMAL(11,8) NOT NULL,
+    pickup_address TEXT,
+    destination_latitude DECIMAL(10,8),
+    destination_longitude DECIMAL(11,8),
+    destination_address TEXT,
+    
+    -- Timing
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    accepted_at TIMESTAMP,
+    arrived_at TIMESTAMP,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    cancelled_at TIMESTAMP,
+    
+    -- Pricing
+    estimated_fare DECIMAL(10,2),
+    actual_fare DECIMAL(10,2),
+    surge_multiplier DECIMAL(3,2) DEFAULT 1.0,
+    tip_amount DECIMAL(10,2) DEFAULT 0,
+    discount_amount DECIMAL(10,2) DEFAULT 0,
+    commission_amount DECIMAL(10,2),
+    driver_earnings DECIMAL(10,2),
+    
+    -- Payment
+    payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'apple_pay', 'google_pay', 'sand_dollar')),
+    payment_status VARCHAR(20) DEFAULT 'pending',
+    payment_intent_id VARCHAR(255),
+    
+    -- Metrics
+    distance_traveled DECIMAL(8,2), -- in kilometers
+    duration_minutes INTEGER,
+    route_polyline TEXT,
+    
+    -- Safety
+    sos_triggered BOOLEAN DEFAULT FALSE,
+    route_deviation_alert BOOLEAN DEFAULT FALSE,
+    speed_violation_alert BOOLEAN DEFAULT FALSE,
+    is_audio_recording_enabled BOOLEAN DEFAULT FALSE,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Safety Events Table
+CREATE TABLE safety_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ride_id UUID REFERENCES rides(id),
+    event_type VARCHAR(50) CHECK (event_type IN ('sos', 'route_deviation', 'speed_violation', 'unauthorized_stop', 'user_report')),
+    severity VARCHAR(20) CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    description TEXT,
+    location_latitude DECIMAL(10,8),
+    location_longitude DECIMAL(11,8),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP,
+    resolution_notes TEXT,
+    reported_by UUID REFERENCES users(id),
+    assigned_to UUID REFERENCES users(id) -- safety officer
+);
+
+-- Payments Table
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ride_id UUID REFERENCES rides(id) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'BSD',
+    status VARCHAR(20) CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'refunded')),
+    payment_method VARCHAR(20),
+    stripe_payment_intent_id VARCHAR(255),
+    stripe_transfer_id VARCHAR(255),
+    fee_amount DECIMAL(10,2),
+    net_amount DECIMAL(10,2),
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+-- Indexes for Performance
+CREATE INDEX idx_rides_rider_id ON rides(rider_id);
+CREATE INDEX idx_rides_driver_id ON rides(driver_id);
+CREATE INDEX idx_rides_status ON rides(status);
+CREATE INDEX idx_rides_requested_at ON rides(requested_at);
+CREATE INDEX idx_drivers_location ON drivers(current_latitude, current_longitude) WHERE is_online = true;
+CREATE INDEX idx_drivers_status ON drivers(status, is_online);
+CREATE INDEX idx_vehicles_driver_id ON vehicles(driver_id);
+CREATE INDEX idx_payments_ride_id ON payments(ride_id);
+CREATE INDEX idx_safety_events_ride_id ON safety_events(ride_id);
