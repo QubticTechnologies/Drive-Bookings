@@ -2,11 +2,12 @@
 headless = true
 address = "0.0.0.0"
 port = 5000
+runOnSave = true
 
 [theme]
 base = "dark"
-primaryColor = "#adff00"
-backgroundColor = "#0a0a0a"
-secondaryBackgroundColor = "#111111"
-textColor = "#f1f1f1"
+primaryColor = "#00C2D4"
+backgroundColor = "#050d0f"
+secondaryBackgroundColor = "#0d1f24"
+textColor = "#e8f4f6"
 font = "sans serif"
