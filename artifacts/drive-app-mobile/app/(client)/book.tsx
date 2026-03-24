@@ -1,9 +1,11 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useCreateRide } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -13,7 +15,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import Animated from "react-native-reanimated";
@@ -117,115 +118,281 @@ function findCoords(name: string) {
   return { lat: 25.048 + (hash % 100) / 1000, lng: -77.355 + ((hash >> 2) % 100) / 1000 };
 }
 
+// ── Nominatim helpers ─────────────────────────────────────────────────────────
+const NOMINATIM_HEADERS = { "User-Agent": "GoRide/1.0 goride-nassau" };
+
+async function nominatimSearch(query: string): Promise<Place[]> {
+  const q = encodeURIComponent(query.trim() + " Nassau Bahamas");
+  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=6`;
+  const res = await fetch(url, { headers: NOMINATIM_HEADERS });
+  const data: any[] = await res.json();
+  return data.map((r) => ({
+    name: r.display_name.split(",")[0].trim(),
+    hint: r.display_name.split(",").slice(1, 3).join(",").trim(),
+    lat: parseFloat(r.lat),
+    lng: parseFloat(r.lon),
+  }));
+}
+
+async function nominatimReverse(lat: number, lng: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`;
+  const res = await fetch(url, { headers: NOMINATIM_HEADERS });
+  const data = await res.json();
+  return data.display_name?.split(",")[0] || "My Location";
+}
+
+function parseLocationText(text: string): { lat: number; lng: number } | null {
+  const coord = text.match(/(-?\d{1,3}\.?\d*)[,\s]+(-?\d{1,3}\.?\d*)/);
+  if (coord) {
+    const lat = parseFloat(coord[1]), lng = parseFloat(coord[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) return { lat, lng };
+  }
+  for (const pat of [/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/, /@(-?\d+\.?\d*),(-?\d+\.?\d*)/, /[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/]) {
+    const m = text.match(pat);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  }
+  return null;
+}
+
 // ── Location Picker Modal ─────────────────────────────────────────────────────
+type PickerTab = "places" | "search" | "gps" | "paste";
+
 function LocationPicker({
-  visible,
-  onSelect,
-  onClose,
-  label,
+  visible, onSelect, onClose, label, allowGps = false,
 }: {
   visible: boolean;
   onSelect: (place: Place) => void;
   onClose: () => void;
   label: string;
+  allowGps?: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<PickerTab>("places");
+  const [filter, setFilter] = useState("");
 
-  const filtered = search.trim()
-    ? getAllPlaces().filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.hint.toLowerCase().includes(search.toLowerCase())
-      )
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState("");
+
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsResult, setGpsResult] = useState<Place | null>(null);
+  const [gpsErr, setGpsErr] = useState("");
+
+  const [pasteText, setPasteText] = useState("");
+  const [pasteResult, setPasteResult] = useState<Place | null>(null);
+  const [pasteErr, setPasteErr] = useState("");
+  const [pasteLoading, setPasteLoading] = useState(false);
+
+  const reset = () => {
+    setFilter(""); setSearchQ(""); setSearchResults([]); setSearchErr("");
+    setGpsResult(null); setGpsErr("");
+    setPasteText(""); setPasteResult(null); setPasteErr("");
+    setTab("places");
+  };
+
+  const handleClose = () => { reset(); onClose(); };
+  const handleSelect = (place: Place) => {
+    Haptics.selectionAsync();
+    onSelect(place);
+    reset();
+    onClose();
+  };
+
+  const doSearch = async () => {
+    if (!searchQ.trim()) return;
+    setSearching(true); setSearchErr(""); setSearchResults([]);
+    try {
+      const results = await nominatimSearch(searchQ);
+      setSearchResults(results);
+      if (results.length === 0) setSearchErr("No results found. Try a broader term.");
+    } catch { setSearchErr("Search failed. Check your connection."); }
+    setSearching(false);
+  };
+
+  const doGps = async () => {
+    setGpsLoading(true); setGpsErr(""); setGpsResult(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") { setGpsErr("Location permission denied. Enable it in Settings."); setGpsLoading(false); return; }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude: lat, longitude: lng } = pos.coords;
+      const name = await nominatimReverse(lat, lng);
+      setGpsResult({ name, hint: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng });
+    } catch { setGpsErr("Could not get your location. Please try again."); }
+    setGpsLoading(false);
+  };
+
+  const doPaste = async () => {
+    setPasteErr(""); setPasteResult(null); setPasteLoading(true);
+    const coords = parseLocationText(pasteText);
+    if (!coords) { setPasteErr("Could not read location. Try: 25.0872, -77.3149"); setPasteLoading(false); return; }
+    try {
+      const name = await nominatimReverse(coords.lat, coords.lng);
+      setPasteResult({ name, hint: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`, lat: coords.lat, lng: coords.lng });
+    } catch {
+      setPasteResult({ name: "Custom Location", hint: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`, lat: coords.lat, lng: coords.lng });
+    }
+    setPasteLoading(false);
+  };
+
+  const tabs = [
+    { id: "places" as PickerTab, label: "Places", icon: "map" as const },
+    { id: "search" as PickerTab, label: "Search", icon: "search" as const },
+    ...(allowGps ? [{ id: "gps" as PickerTab, label: "My Location", icon: "navigation" as const }] : []),
+    { id: "paste" as PickerTab, label: "Paste Link", icon: "link" as const },
+  ];
+
+  const filteredPlaces = filter.trim()
+    ? getAllPlaces().filter((p) => p.name.toLowerCase().includes(filter.toLowerCase()) || p.hint.toLowerCase().includes(filter.toLowerCase()))
     : null;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={[pickerStyles.container, { paddingBottom: insets.bottom || 16 }]}>
+        {/* Header */}
         <View style={pickerStyles.header}>
           <Text style={pickerStyles.headerTitle}>{label}</Text>
-          <Pressable onPress={onClose} style={pickerStyles.closeBtn}>
+          <Pressable onPress={handleClose} style={pickerStyles.closeBtn} hitSlop={12}>
             <Feather name="x" size={22} color={COLORS.text} />
           </Pressable>
         </View>
 
-        <View style={pickerStyles.searchBox}>
-          <Feather name="search" size={16} color={COLORS.textSub} />
-          <TextInput
-            style={pickerStyles.searchInput}
-            placeholder="Search locations…"
-            placeholderTextColor={COLORS.textMuted}
-            value={search}
-            onChangeText={setSearch}
-            autoFocus
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Feather name="x-circle" size={16} color={COLORS.textSub} />
+        {/* Tab bar */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={pickerStyles.tabBar}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 12 }}>
+          {tabs.map((t) => (
+            <Pressable key={t.id} style={[pickerStyles.tab, tab === t.id && pickerStyles.tabActive]} onPress={() => setTab(t.id)}>
+              <Feather name={t.icon} size={13} color={tab === t.id ? COLORS.bg : COLORS.textSub} />
+              <Text style={[pickerStyles.tabText, tab === t.id && pickerStyles.tabTextActive]}>{t.label}</Text>
             </Pressable>
-          )}
-        </View>
+          ))}
+        </ScrollView>
 
-        <FlatList
-          data={filtered ?? CATEGORIES}
-          keyExtractor={(_, i) => String(i)}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          renderItem={({ item }) => {
-            if (filtered) {
-              const place = item as Place;
-              return (
-                <Pressable
-                  style={pickerStyles.placeRow}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    onSelect(place);
-                    setSearch("");
-                    onClose();
-                  }}
-                >
-                  <View style={pickerStyles.placeIcon}>
-                    <Ionicons name="location-outline" size={16} color={COLORS.textSub} />
-                  </View>
+        {/* ── PLACES ── */}
+        {tab === "places" && (
+          <>
+            <View style={pickerStyles.searchBox}>
+              <Feather name="search" size={16} color={COLORS.textSub} />
+              <TextInput style={pickerStyles.searchInput} placeholder="Filter places…"
+                placeholderTextColor={COLORS.textMuted} value={filter} onChangeText={setFilter} />
+              {filter.length > 0 && <Pressable onPress={() => setFilter("")} hitSlop={8}><Feather name="x-circle" size={16} color={COLORS.textSub} /></Pressable>}
+            </View>
+            <FlatList data={filteredPlaces ?? CATEGORIES} keyExtractor={(_, i) => String(i)}
+              showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
+              renderItem={({ item }) => {
+                if (filteredPlaces) {
+                  const place = item as Place;
+                  return (
+                    <Pressable style={pickerStyles.placeRow} onPress={() => handleSelect(place)}>
+                      <View style={pickerStyles.placeIcon}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
+                      <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{place.name}</Text><Text style={pickerStyles.placeHint}>{place.hint}</Text></View>
+                    </Pressable>
+                  );
+                }
+                const cat = item as typeof CATEGORIES[0];
+                return (
                   <View>
-                    <Text style={pickerStyles.placeName}>{place.name}</Text>
-                    <Text style={pickerStyles.placeHint}>{place.hint}</Text>
+                    <View style={pickerStyles.catHeader}>
+                      <Ionicons name={cat.icon} size={14} color={cat.color} />
+                      <Text style={[pickerStyles.catTitle, { color: cat.color }]}>{cat.title}</Text>
+                    </View>
+                    {cat.places.map((place) => (
+                      <Pressable key={place.name} style={pickerStyles.placeRow} onPress={() => handleSelect(place)}>
+                        <View style={pickerStyles.placeIcon}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
+                        <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{place.name}</Text><Text style={pickerStyles.placeHint}>{place.hint}</Text></View>
+                      </Pressable>
+                    ))}
                   </View>
-                </Pressable>
-              );
-            }
-            const cat = item as typeof CATEGORIES[0];
-            return (
-              <View>
-                <View style={pickerStyles.catHeader}>
-                  <Ionicons name={cat.icon} size={14} color={cat.color} />
-                  <Text style={[pickerStyles.catTitle, { color: cat.color }]}>{cat.title}</Text>
-                </View>
-                {cat.places.map((place) => (
-                  <Pressable
-                    key={place.name}
-                    style={pickerStyles.placeRow}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      onSelect(place);
-                      setSearch("");
-                      onClose();
-                    }}
-                  >
-                    <View style={pickerStyles.placeIcon}>
-                      <Ionicons name="location-outline" size={16} color={COLORS.textSub} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={pickerStyles.placeName}>{place.name}</Text>
-                      <Text style={pickerStyles.placeHint}>{place.hint}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+                );
+              }}
+            />
+          </>
+        )}
+
+        {/* ── SEARCH ── */}
+        {tab === "search" && (
+          <View style={pickerStyles.tabContent}>
+            <Text style={pickerStyles.tabHint}>Search any address in Nassau or the Bahamas</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={[pickerStyles.searchBox, { flex: 1, marginBottom: 0 }]}>
+                <Feather name="search" size={16} color={COLORS.textSub} />
+                <TextInput style={pickerStyles.searchInput} placeholder="e.g. Carmichael Road, Fish Fry…"
+                  placeholderTextColor={COLORS.textMuted} value={searchQ} onChangeText={setSearchQ}
+                  autoFocus returnKeyType="search" onSubmitEditing={doSearch} />
               </View>
-            );
-          }}
-        />
+              <Pressable style={pickerStyles.searchBtn} onPress={doSearch}>
+                {searching ? <ActivityIndicator size="small" color={COLORS.bg} /> : <Feather name="arrow-right" size={18} color={COLORS.bg} />}
+              </Pressable>
+            </View>
+            {searchErr ? <Text style={pickerStyles.errorText}>{searchErr}</Text> : null}
+            <FlatList data={searchResults} keyExtractor={(_, i) => String(i)}
+              showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, marginTop: 12 }}
+              renderItem={({ item }) => (
+                <Pressable style={pickerStyles.placeRow} onPress={() => handleSelect(item)}>
+                  <View style={pickerStyles.placeIcon}><Feather name="map-pin" size={16} color={COLORS.accent} /></View>
+                  <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{item.name}</Text><Text style={pickerStyles.placeHint}>{item.hint}</Text></View>
+                </Pressable>
+              )}
+            />
+          </View>
+        )}
+
+        {/* ── GPS ── */}
+        {tab === "gps" && (
+          <View style={[pickerStyles.tabContent, { alignItems: "center", paddingTop: 36 }]}>
+            <View style={pickerStyles.gpsIcon}><Feather name="navigation" size={32} color={COLORS.accent} /></View>
+            <Text style={pickerStyles.gpsTitle}>Use My Current Location</Text>
+            <Text style={pickerStyles.gpsHint}>We'll detect where you are right now and use it as your pickup.</Text>
+            {gpsErr ? <Text style={pickerStyles.errorText}>{gpsErr}</Text> : null}
+            {gpsResult ? (
+              <View style={pickerStyles.resultRow}>
+                <Feather name="check-circle" size={20} color={COLORS.success} />
+                <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{gpsResult.name}</Text><Text style={pickerStyles.placeHint}>{gpsResult.hint}</Text></View>
+                <Pressable style={pickerStyles.useBtn} onPress={() => handleSelect(gpsResult!)}>
+                  <Text style={pickerStyles.useBtnText}>Use This</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable style={pickerStyles.actionBtn} onPress={doGps} disabled={gpsLoading}>
+                {gpsLoading ? <ActivityIndicator color={COLORS.bg} /> : <><Feather name="crosshair" size={18} color={COLORS.bg} /><Text style={pickerStyles.actionBtnText}>Detect My Location</Text></>}
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {/* ── PASTE ── */}
+        {tab === "paste" && (
+          <View style={pickerStyles.tabContent}>
+            <Text style={pickerStyles.tabHint}>Paste a Google Maps link or coordinates someone sent you</Text>
+            <View style={pickerStyles.pasteBox}>
+              <TextInput style={pickerStyles.pasteInput}
+                placeholder={"25.0872, -77.3149\n— or —\nhttps://maps.google.com/..."}
+                placeholderTextColor={COLORS.textMuted} value={pasteText}
+                onChangeText={(v) => { setPasteText(v); setPasteResult(null); setPasteErr(""); }}
+                multiline autoCapitalize="none" autoCorrect={false} />
+            </View>
+            <Pressable style={pickerStyles.actionBtn} onPress={doPaste} disabled={pasteLoading || !pasteText.trim()}>
+              {pasteLoading ? <ActivityIndicator color={COLORS.bg} /> : <><Feather name="check" size={18} color={COLORS.bg} /><Text style={pickerStyles.actionBtnText}>Confirm Location</Text></>}
+            </Pressable>
+            {pasteErr ? <Text style={pickerStyles.errorText}>{pasteErr}</Text> : null}
+            {pasteResult && (
+              <View style={pickerStyles.resultRow}>
+                <Feather name="map-pin" size={20} color={COLORS.accent} />
+                <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{pasteResult.name}</Text><Text style={pickerStyles.placeHint}>{pasteResult.hint}</Text></View>
+                <Pressable style={pickerStyles.useBtn} onPress={() => handleSelect(pasteResult!)}>
+                  <Text style={pickerStyles.useBtnText}>Use This</Text>
+                </Pressable>
+              </View>
+            )}
+            <View style={pickerStyles.pasteHints}>
+              <Text style={pickerStyles.pasteHintsTitle}>Accepted formats:</Text>
+              <Text style={pickerStyles.pasteHintItem}>• Coordinates: 25.0872, -77.3149</Text>
+              <Text style={pickerStyles.pasteHintItem}>• Google Maps link (tap Share → Copy Link)</Text>
+              <Text style={pickerStyles.pasteHintItem}>• Apple Maps / WhatsApp location</Text>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -233,62 +400,39 @@ function LocationPicker({
 
 const pickerStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg, paddingTop: 12 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
   headerTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: COLORS.text },
   closeBtn: { padding: 4 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchInput: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-  },
-  catHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 8,
-  },
+  tabBar: { flexGrow: 0 },
+  tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
+  tabActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  tabText: { fontSize: 13, fontFamily: "Inter_500Medium", color: COLORS.textSub },
+  tabTextActive: { color: COLORS.bg },
+  tabContent: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+  tabHint: { fontSize: 13, fontFamily: "Inter_400Regular", color: COLORS.textSub, marginBottom: 14, lineHeight: 19 },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, marginBottom: 12, backgroundColor: COLORS.card, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: COLORS.border },
+  searchInput: { flex: 1, color: COLORS.text, fontSize: 15, fontFamily: "Inter_400Regular" },
+  searchBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
+  catHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
   catTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textTransform: "uppercase" },
-  placeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  placeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  placeRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  placeIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
   placeName: { fontSize: 15, fontFamily: "Inter_500Medium", color: COLORS.text, marginBottom: 2 },
   placeHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub },
+  errorText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#ff6b6b", marginTop: 10, textAlign: "center" },
+  gpsIcon: { width: 72, height: 72, borderRadius: 22, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  gpsTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: COLORS.text, marginBottom: 8 },
+  gpsHint: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center", lineHeight: 20, marginBottom: 24, paddingHorizontal: 10 },
+  actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 24, marginTop: 4 },
+  actionBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: COLORS.bg },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 14, padding: 14, marginTop: 20, borderWidth: 1, borderColor: COLORS.border, width: "100%" },
+  useBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.accent, borderRadius: 10 },
+  useBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: COLORS.bg },
+  pasteBox: { backgroundColor: COLORS.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 14, minHeight: 90 },
+  pasteInput: { color: COLORS.text, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  pasteHints: { marginTop: 20, padding: 16, backgroundColor: COLORS.card, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border },
+  pasteHintsTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: COLORS.textSub, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 },
+  pasteHintItem: { fontSize: 13, fontFamily: "Inter_400Regular", color: COLORS.textSub, marginBottom: 4 },
 });
 
 // ── Book Screen ───────────────────────────────────────────────────────────────
@@ -508,6 +652,7 @@ export default function BookScreen() {
         label="Choose Pickup"
         onSelect={(p) => setPickup(p)}
         onClose={() => setPickerFor(null)}
+        allowGps
       />
       <LocationPicker
         visible={pickerFor === "dropoff"}
