@@ -12,7 +12,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "@/constants/colors";
@@ -79,16 +78,16 @@ export default function PhoneScreen() {
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
-        <Animated.View entering={FadeIn.duration(400)} style={styles.hero}>
+        <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Text style={styles.iconEmoji}>{cc.flag}</Text>
           </View>
           <Text style={styles.title}>{t.phoneTitle}</Text>
           <Text style={styles.sub}>{t.phoneSubtitle}</Text>
-        </Animated.View>
+        </View>
 
         {/* Country cycle */}
-        <Animated.View entering={FadeInDown.delay(150).springify()}>
+        <View>
           <Text style={styles.label}>Country</Text>
           <Pressable
             style={styles.countryBtn}
@@ -102,9 +101,9 @@ export default function PhoneScreen() {
             <Text style={styles.countryDial}>{cc.dial}</Text>
             <Feather name="refresh-cw" size={14} color={COLORS.textMuted} />
           </Pressable>
-        </Animated.View>
+        </View>
 
-        <Animated.View entering={FadeInDown.delay(250).springify()} style={styles.inputSection}>
+        <View style={styles.inputSection}>
           <Text style={styles.label}>Phone Number</Text>
           <Pressable style={[styles.inputWrap, !!error && styles.inputError]} onPress={() => inputRef.current?.focus()}>
             <Text style={styles.dialPrefix}>{cc.dial}</Text>
@@ -112,7 +111,7 @@ export default function PhoneScreen() {
               ref={inputRef}
               style={styles.input}
               value={phone}
-              onChangeText={(t) => { setPhone(t); setError(""); }}
+              onChangeText={(v) => { setPhone(v); setError(""); }}
               placeholder="555-0100"
               placeholderTextColor={COLORS.textMuted}
               keyboardType="phone-pad"
@@ -122,12 +121,12 @@ export default function PhoneScreen() {
             />
           </Pressable>
           {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
-        </Animated.View>
+        </View>
 
-        <Animated.View entering={FadeInDown.delay(350).springify()} style={styles.privacyNote}>
+        <View style={styles.privacyNote}>
           <Feather name="lock" size={12} color={COLORS.textMuted} />
           <Text style={styles.privacyTxt}>Your number is never shared with drivers</Text>
-        </Animated.View>
+        </View>
 
         <View style={{ flex: 1 }} />
 

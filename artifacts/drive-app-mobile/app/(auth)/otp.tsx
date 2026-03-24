@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "@/constants/colors";
@@ -35,8 +35,8 @@ export default function OtpScreen() {
   // Countdown timer
   useEffect(() => {
     if (resendTimer <= 0) return;
-    const t = setInterval(() => setResendTimer((s) => s - 1), 1000);
-    return () => clearInterval(t);
+    const id = setInterval(() => setResendTimer((s) => s - 1), 1000);
+    return () => clearInterval(id);
   }, [resendTimer]);
 
   const { mutate: verify, isPending } = useVerifyCode({
@@ -71,6 +71,7 @@ export default function OtpScreen() {
     },
   });
 
+  // useAnimatedStyle only — no `entering` prop on this view
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
   const handleVerify = () => {
@@ -97,7 +98,7 @@ export default function OtpScreen() {
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
-        <Animated.View entering={FadeIn.duration(400)} style={styles.hero}>
+        <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="chatbubble-ellipses-outline" size={32} color={COLORS.accent} />
           </View>
@@ -106,10 +107,9 @@ export default function OtpScreen() {
             {t.otpSubtitle}{"\n"}
             <Text style={styles.subPhone}>{pendingPhone}</Text>
           </Text>
-        </Animated.View>
+        </View>
 
-        {/* OTP dots display — entering and shakeStyle on separate Animated.Views */}
-        <Animated.View entering={FadeInDown.delay(150).springify()}>
+        {/* OTP dots — only useAnimatedStyle (shake), no entering prop */}
         <Animated.View style={[styles.dotsRow, shakeStyle]}>
           {Array.from({ length: CODE_LEN }).map((_, i) => {
             const filled = i < code.length;
@@ -130,7 +130,6 @@ export default function OtpScreen() {
             );
           })}
         </Animated.View>
-        </Animated.View>
 
         {/* Hidden input that captures keyboard */}
         <TextInput
@@ -147,29 +146,27 @@ export default function OtpScreen() {
           autoFocus
         />
 
-        {error ? (
-          <Animated.Text entering={FadeIn} style={styles.errorTxt}>{error}</Animated.Text>
-        ) : null}
+        {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
 
         {/* Dev code hint */}
         {devCode ? (
-          <Animated.View entering={FadeInDown.delay(200)} style={styles.devHint}>
+          <View style={styles.devHint}>
             <Feather name="terminal" size={12} color={COLORS.warning} />
             <Text style={styles.devHintTxt}>Dev code: <Text style={{ fontFamily: "Inter_700Bold" }}>{devCode}</Text></Text>
-          </Animated.View>
+          </View>
         ) : null}
 
-        {/* Resend */}
-        <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.resendRow}>
+        {/* Wrong number / change */}
+        <View style={styles.resendRow}>
           <Text style={styles.resendLabel}>{t.wrongNumber} </Text>
           <Pressable onPress={() => router.replace("/(auth)/phone")} hitSlop={8}>
             <Text style={styles.resendLink}>{t.change}</Text>
           </Pressable>
-        </Animated.View>
+        </View>
 
         <View style={{ flex: 1 }} />
 
-        <Animated.View entering={FadeInDown.delay(400).springify()} style={{ gap: 12 }}>
+        <View style={{ gap: 12 }}>
           <Pressable
             style={[styles.verifyBtn, (isPending || code.length !== CODE_LEN) && { opacity: 0.6 }]}
             onPress={handleVerify}
@@ -194,7 +191,7 @@ export default function OtpScreen() {
                 : t.resendCode}
             </Text>
           </Pressable>
-        </Animated.View>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
