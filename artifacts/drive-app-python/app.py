@@ -205,6 +205,7 @@ _defaults = {
     "pickup_lat": None, "pickup_lng": None, "pickup_label": "",
     "dropoff_lat": None, "dropoff_lng": None, "dropoff_label": "",
     "pickup_search_results": [], "dropoff_search_results": [],
+    "pickup_paste_text": "", "dropoff_paste_text": "",
     "route_info": None,
 }
 for key, default in _defaults.items():
@@ -719,102 +720,136 @@ def _all_place_names():
 
 def _location_picker(key_prefix: str, label: str, allow_gps: bool = True):
     """
-    Interactive location picker — GPS · Nominatim search · Landmark · Paste link/coords.
-    Returns (lat, lng, label_string). All three may be None/empty until user picks.
+    Interactive location picker — tabs for GPS · Search · Landmark · Paste.
+    Returns (lat, lng, label_string).
     """
-    modes = []
-    if allow_gps:
-        modes.append("📍 My Location (GPS)")
-    modes += ["🔍 Search Address", "🏛️ Famous Landmark", "📋 Paste Link / Coords"]
-
-    mode = st.radio(label, modes, horizontal=True, key=f"{key_prefix}_mode",
-                    label_visibility="visible")
-
     lat = st.session_state.get(f"{key_prefix}_lat")
     lng = st.session_state.get(f"{key_prefix}_lng")
     lbl = st.session_state.get(f"{key_prefix}_label", "")
 
-    # ── GPS ──────────────────────────────────────────────────────────────────
-    if mode == "📍 My Location (GPS)":
-        geo = get_geolocation(key=f"geo_{key_prefix}")
-        if geo and geo.get("coords"):
-            new_lat = round(geo["coords"]["latitude"], 6)
-            new_lng = round(geo["coords"]["longitude"], 6)
-            acc = geo["coords"].get("accuracy", 0)
-            if (new_lat, new_lng) != (lat, lng):
-                with st.spinner("Identifying your address…"):
-                    address = db.reverse_geocode(new_lat, new_lng)
-                st.session_state[f"{key_prefix}_lat"] = new_lat
-                st.session_state[f"{key_prefix}_lng"] = new_lng
-                st.session_state[f"{key_prefix}_label"] = address
-                lat, lng, lbl = new_lat, new_lng, address
-            if lat:
-                st.success(f"📍 **{lbl}** *(GPS ±{acc:.0f} m)*")
-        else:
-            st.info("🔐 Click **Allow** when your browser asks for location access. "
-                    "Works on HTTPS and deployed servers.")
+    # ── If a location is already set, show it with a clear button ────────────
+    if lat and lbl:
+        sel_col, clr_col = st.columns([6, 1])
+        sel_col.success(f"✅ **{lbl}**  \n`{lat:.5f}, {lng:.5f}`")
+        if clr_col.button("✕ Clear", key=f"{key_prefix}_clear", use_container_width=True):
+            st.session_state[f"{key_prefix}_lat"] = None
+            st.session_state[f"{key_prefix}_lng"] = None
+            st.session_state[f"{key_prefix}_label"] = ""
+            st.session_state[f"{key_prefix}_search_results"] = []
+            st.rerun()
+        return lat, lng, lbl
 
-    # ── Nominatim search ─────────────────────────────────────────────────────
-    elif mode == "🔍 Search Address":
+    st.caption(label)
+
+    # ── Build tabs ────────────────────────────────────────────────────────────
+    tab_labels = []
+    if allow_gps:
+        tab_labels.append("📍 My Location")
+    tab_labels += ["🔍 Search", "🏛️ Landmark", "📋 Paste Link"]
+    tabs = st.tabs(tab_labels)
+    idx = 0
+
+    # ── GPS tab ───────────────────────────────────────────────────────────────
+    if allow_gps:
+        with tabs[idx]:
+            st.caption("We'll use your browser's GPS to find you automatically.")
+            geo = get_geolocation(key=f"geo_{key_prefix}")
+            if geo and geo.get("coords"):
+                new_lat = round(geo["coords"]["latitude"], 6)
+                new_lng = round(geo["coords"]["longitude"], 6)
+                acc = geo["coords"].get("accuracy", 0)
+                if (new_lat, new_lng) != (lat, lng):
+                    with st.spinner("Identifying your address…"):
+                        address = db.reverse_geocode(new_lat, new_lng)
+                    st.session_state[f"{key_prefix}_lat"] = new_lat
+                    st.session_state[f"{key_prefix}_lng"] = new_lng
+                    st.session_state[f"{key_prefix}_label"] = address
+                    st.rerun()
+                if lat:
+                    st.success(f"📍 **{lbl}**  *(±{acc:.0f} m accuracy)*")
+            else:
+                st.info("🔐 Click **Allow** when your browser asks for location access.")
+                st.caption("Works on HTTPS (deployed) and localhost. If blocked, try the Search or Paste tab.")
+        idx += 1
+
+    # ── Search tab ────────────────────────────────────────────────────────────
+    with tabs[idx]:
+        st.caption("Type any address, area, or business name in Nassau or the Bahamas.")
         col_q, col_btn = st.columns([5, 1])
         query = col_q.text_input(
-            "Search", placeholder="e.g. Atlantis Resort, Fish Fry, Carmichael Road…",
-            key=f"{key_prefix}_search_q", label_visibility="collapsed")
-        search_clicked = col_btn.button("Go", key=f"{key_prefix}_search_btn")
+            "Address search", label_visibility="collapsed",
+            placeholder="e.g. Atlantis Resort, Fish Fry, Carmichael Road…",
+            key=f"{key_prefix}_search_q")
+        go = col_btn.button("Go →", key=f"{key_prefix}_search_btn", use_container_width=True)
 
-        if search_clicked and query.strip():
+        if go and query.strip():
             with st.spinner("Searching…"):
                 results = db.geocode_address(query.strip())
             st.session_state[f"{key_prefix}_search_results"] = results
 
         results = st.session_state.get(f"{key_prefix}_search_results", [])
         if results:
-            options = {r["display_name"][:80]: r for r in results}
-            sel = st.selectbox("Select:", list(options.keys()),
-                               key=f"{key_prefix}_search_sel")
-            r = options[sel]
-            new_lat = round(float(r["lat"]), 6)
-            new_lng = round(float(r["lon"]), 6)
-            short = sel.split(",")[0].strip()
-            st.session_state[f"{key_prefix}_lat"] = new_lat
-            st.session_state[f"{key_prefix}_lng"] = new_lng
-            st.session_state[f"{key_prefix}_label"] = short
-            lat, lng, lbl = new_lat, new_lng, short
-            st.caption(f"✅ {short} · {new_lat:.5f}, {new_lng:.5f}")
-        elif search_clicked:
-            st.warning("No results. Try a broader search term.")
+            st.caption(f"{len(results)} result(s) — tap to select:")
+            for i, r in enumerate(results):
+                name = r["display_name"].split(",")[0].strip()
+                hint = ", ".join(r["display_name"].split(",")[1:3]).strip()
+                if st.button(f"📌 **{name}**  \n{hint}", key=f"{key_prefix}_res_{i}",
+                             use_container_width=True):
+                    st.session_state[f"{key_prefix}_lat"] = round(float(r["lat"]), 6)
+                    st.session_state[f"{key_prefix}_lng"] = round(float(r["lon"]), 6)
+                    st.session_state[f"{key_prefix}_label"] = name
+                    st.session_state[f"{key_prefix}_search_results"] = []
+                    st.rerun()
+        elif go:
+            st.warning("No results found. Try a broader term, e.g. 'Airport' or 'Cable Beach'.")
+    idx += 1
 
-    # ── Famous landmark ───────────────────────────────────────────────────────
-    elif mode == "🏛️ Famous Landmark":
+    # ── Landmark tab ──────────────────────────────────────────────────────────
+    with tabs[idx]:
+        st.caption("Choose a well-known spot in Nassau from the list below.")
         place_names = [n for n in _all_place_names() if not n.startswith("──")]
         default_idx = place_names.index(lbl) if lbl in place_names else 0
         chosen = st.selectbox("Select landmark:", place_names, index=default_idx,
                               key=f"{key_prefix}_landmark_sel")
         plat, plng = _get_place_coords(chosen)
-        st.session_state[f"{key_prefix}_lat"] = plat
-        st.session_state[f"{key_prefix}_lng"] = plng
-        st.session_state[f"{key_prefix}_label"] = chosen
-        lat, lng, lbl = plat, plng, chosen
-        st.caption(f"✅ {chosen} · {plat:.5f}, {plng:.5f}")
+        st.caption(f"{plat:.5f}, {plng:.5f}")
+        if st.button("✓ Use this landmark", key=f"{key_prefix}_landmark_btn",
+                     type="primary", use_container_width=True):
+            st.session_state[f"{key_prefix}_lat"] = plat
+            st.session_state[f"{key_prefix}_lng"] = plng
+            st.session_state[f"{key_prefix}_label"] = chosen
+            st.rerun()
+    idx += 1
 
-    # ── Paste link / coords ───────────────────────────────────────────────────
-    elif mode == "📋 Paste Link / Coords":
-        paste = st.text_input(
-            "Paste Google Maps / Apple Maps link or coordinates",
-            placeholder="25.0872, -77.3149   or   https://maps.google.com/...",
-            key=f"{key_prefix}_paste")
+    # ── Paste tab ─────────────────────────────────────────────────────────────
+    with tabs[idx]:
+        st.caption("Paste a Google Maps / Apple Maps link, WhatsApp location, or plain coordinates.")
+        paste = st.text_area(
+            "Paste here", label_visibility="collapsed",
+            placeholder="25.0872, -77.3149\n— or —\nhttps://maps.google.com/...",
+            key=f"{key_prefix}_paste_text", height=90)
         if paste.strip():
             plat, plng = db.parse_location_input(paste.strip())
             if plat and plng:
-                with st.spinner("Identifying address…"):
-                    address = db.reverse_geocode(plat, plng)
-                st.session_state[f"{key_prefix}_lat"] = plat
-                st.session_state[f"{key_prefix}_lng"] = plng
-                st.session_state[f"{key_prefix}_label"] = address
-                lat, lng, lbl = plat, plng, address
-                st.success(f"📌 **{address}** · ({plat:.5f}, {plng:.5f})")
+                st.caption(f"Parsed coords: {plat:.5f}, {plng:.5f}")
+                if st.button("✓ Confirm this location", key=f"{key_prefix}_paste_btn",
+                             type="primary", use_container_width=True):
+                    with st.spinner("Identifying address…"):
+                        address = db.reverse_geocode(plat, plng)
+                    st.session_state[f"{key_prefix}_lat"] = plat
+                    st.session_state[f"{key_prefix}_lng"] = plng
+                    st.session_state[f"{key_prefix}_label"] = address
+                    st.rerun()
             else:
-                st.error("Could not read location. Try format: `25.0800, -77.3420`")
+                st.error("❌ Could not read location. Try format: `25.0800, -77.3420`")
+        else:
+            st.markdown(
+                "**Accepted formats:**\n"
+                "- Coordinates: `25.0872, -77.3149`\n"
+                "- Google Maps link *(Share → Copy link)*\n"
+                "- Apple Maps link\n"
+                "- WhatsApp / iMessage location"
+            )
 
     return lat, lng, lbl
 

@@ -86,35 +86,64 @@ def parse_location_input(text: str):
     Parse coordinates or map links pasted by the user.
     Supports:
       - "25.0800, -77.3420"
-      - Google Maps: maps.google.com/...@25.08,-77.34  or  ?q=25.08,-77.34
-      - Apple Maps:  maps.apple.com/?ll=25.08,-77.34
-      - Any URL with lat,lng in it
+      - Google Maps: @lat,lng  ?q=lat,lng  /place/.../lat,lng
+      - Apple Maps:  ?ll=lat,lng  ?q=lat,lng
+      - Waze:        ul?ll=lat%2Clng
+      - WhatsApp / iMessage location text
+      - maps.app.goo.gl short links (follows redirect)
     Returns (lat, lng) floats or (None, None).
     """
     text = text.strip()
 
-    # Raw "lat, lng" or "lat,lng"
+    # ── Short-link redirect (maps.app.goo.gl, goo.gl/maps, etc.) ─────────────
+    if re.search(r"goo\.gl|maps\.app\.goo\.gl|bit\.ly|tinyurl", text):
+        url = re.search(r"https?://\S+", text)
+        if url:
+            try:
+                resp = requests.head(url.group(), allow_redirects=True, timeout=5,
+                                     headers=HEADERS)
+                text = resp.url
+            except Exception:
+                pass
+
+    # ── Raw "lat, lng" or "lat,lng" on its own line ───────────────────────────
     m = re.match(r"^(-?\d{1,3}\.?\d*)[,\s]+(-?\d{1,3}\.?\d*)$", text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
-    # Google Maps @lat,lng,zoom
+    # ── Google Maps @lat,lng,zoom ─────────────────────────────────────────────
     m = re.search(r"@(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
-    # ?q=lat,lng  or  ?ll=lat,lng
-    m = re.search(r"[?&](?:q|ll)=(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
+    # ── ?q=lat,lng  or  ?ll=lat,lng  or  ?center=lat,lng ─────────────────────
+    m = re.search(r"[?&](?:q|ll|center)=(-?\d+\.?\d+)[,+%]2C?(-?\d+\.?\d+)", text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
-    # place/lat,lng
+    m = re.search(r"[?&](?:q|ll|center)=(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # ── /place/.../lat,lng ────────────────────────────────────────────────────
     m = re.search(r"place/[^/]*/(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
-    # fallback: any two decimals that look like lat/lng for Nassau
-    m = re.search(r"(2[45]\.\d+)[^\d-]+(-77\.\d+)", text)
+    # ── Waze ul?ll=lat%2Clng ─────────────────────────────────────────────────
+    m = re.search(r"ll=(-?\d+\.?\d+)(?:%2C|,)(-?\d+\.?\d+)", text, re.IGNORECASE)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # ── WhatsApp "Location: https://maps.google.com/?q=..." ──────────────────
+    m = re.search(r"Location:\s*https?://\S+", text, re.IGNORECASE)
+    if m:
+        sub = parse_location_input(m.group().split(":", 1)[1].strip())
+        if sub[0]:
+            return sub
+
+    # ── Nassau-area fallback: any two decimals near Nassau coords ─────────────
+    m = re.search(r"(2[45]\.\d{3,})[^\d-]+(-7[678]\.\d{3,})", text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
