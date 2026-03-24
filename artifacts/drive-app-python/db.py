@@ -295,12 +295,15 @@ def update_ride_status(ride_id: int, status: str, driver_id: int = None):
                     UPDATE rides SET status=%s, driver_id=%s, accepted_at=%s
                     WHERE id=%s RETURNING *
                 """, (status, driver_id, now, ride_id))
+                ride = cur.fetchone()          # fetch BEFORE second query
                 if driver_id:
                     cur.execute("UPDATE drivers SET status='busy' WHERE id=%s", (driver_id,))
+                return ride
             elif status == "in_progress":
                 cur.execute("""
                     UPDATE rides SET status=%s, started_at=%s WHERE id=%s RETURNING *
                 """, (status, now, ride_id))
+                return cur.fetchone()
             elif status == "completed":
                 cur.execute("""
                     UPDATE rides SET status=%s, completed_at=%s, final_fare=estimated_fare
@@ -327,4 +330,5 @@ def update_ride_status(ride_id: int, status: str, driver_id: int = None):
                 cur.execute("""
                     UPDATE rides SET status=%s WHERE id=%s RETURNING *
                 """, (status, ride_id))
-            return cur.fetchone()
+                return cur.fetchone()
+            return None
