@@ -28,7 +28,14 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.bg },
+        gestureEnabled: false,
+        animation: "none",
+      }}
+    >
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(client)" />
