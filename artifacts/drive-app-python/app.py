@@ -753,7 +753,7 @@ def _location_picker(key_prefix: str, label: str, allow_gps: bool = True):
     if allow_gps:
         with tabs[idx]:
             st.caption("We'll use your browser's GPS to find you automatically.")
-            geo = get_geolocation(key=f"geo_{key_prefix}")
+            geo = get_geolocation()
             if geo and geo.get("coords"):
                 new_lat = round(geo["coords"]["latitude"], 6)
                 new_lng = round(geo["coords"]["longitude"], 6)
