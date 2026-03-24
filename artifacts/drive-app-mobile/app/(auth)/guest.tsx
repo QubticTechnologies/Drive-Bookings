@@ -35,7 +35,7 @@ export default function GuestScreen() {
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGuestMode(name.trim() || "Guest");
-    router.replace("/");
+    router.replace("/(client)/book");
   };
 
   const perks = [

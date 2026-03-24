@@ -24,7 +24,7 @@ const CODE_LEN = 6;
 export default function OtpScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useI18n();
-  const { pendingPhone, pendingUserId, setRiderUser } = useApp();
+  const { pendingPhone, pendingUserId, setRiderUser, activeRideId } = useApp();
   const { devCode } = useLocalSearchParams<{ devCode?: string }>();
   const [code, setCode] = useState(devCode ?? "");
   const [error, setError] = useState("");
@@ -44,7 +44,11 @@ export default function OtpScreen() {
       onSuccess: (user) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setRiderUser(user);
-        router.replace("/");
+        if (activeRideId) {
+          router.replace(`/(client)/track/${activeRideId}`);
+        } else {
+          router.replace("/(client)/book");
+        }
       },
       onError: () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
