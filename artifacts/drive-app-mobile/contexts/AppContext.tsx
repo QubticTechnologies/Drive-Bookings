@@ -23,6 +23,7 @@ interface RiderUser {
 interface AppState {
   // Shared role
   role: Role;
+  hydrated: boolean;
   // Rider / guest
   userId: string | null;
   riderUser: RiderUser | null;
@@ -47,6 +48,7 @@ interface AppState {
 
 const AppContext = createContext<AppState>({
   role: null,
+  hydrated: false,
   userId: null,
   riderUser: null,
   guestName: null,
@@ -68,6 +70,7 @@ const STORAGE_KEY = "driveapp_session_v2";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<Role>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [riderUser, setRiderUserState] = useState<RiderUser | null>(null);
   const [guestName, setGuestName] = useState<string | null>(null);
@@ -80,17 +83,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Hydrate from storage
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (!raw) return;
-      try {
-        const d = JSON.parse(raw);
-        setRoleState(d.role ?? null);
-        setUserId(d.userId ?? null);
-        setRiderUserState(d.riderUser ?? null);
-        setGuestName(d.guestName ?? null);
-        setDriverId(d.driverId ?? null);
-        setDriverName(d.driverName ?? null);
-        setActiveRideIdState(d.activeRideId ?? null);
-      } catch {}
+      if (raw) {
+        try {
+          const d = JSON.parse(raw);
+          setRoleState(d.role ?? null);
+          setUserId(d.userId ?? null);
+          setRiderUserState(d.riderUser ?? null);
+          setGuestName(d.guestName ?? null);
+          setDriverId(d.driverId ?? null);
+          setDriverName(d.driverName ?? null);
+          setActiveRideIdState(d.activeRideId ?? null);
+        } catch {}
+      }
+      setHydrated(true);
     });
   }, []);
 
@@ -169,6 +174,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         role,
+        hydrated,
         userId,
         riderUser,
         guestName,

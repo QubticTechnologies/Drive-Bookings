@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "@/constants/colors";
@@ -392,7 +392,7 @@ export default function BookScreen() {
           </ScrollView>
 
           {/* Your Details */}
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.section}>
+          <Animated.View style={styles.section}>
             <Text style={styles.sectionLabel}>Your Details</Text>
             <View style={styles.inputRow}>
               <Feather name="user" size={16} color={COLORS.textSub} style={styles.inputIcon} />
@@ -418,7 +418,7 @@ export default function BookScreen() {
           </Animated.View>
 
           {/* Trip */}
-          <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.section}>
+          <Animated.View style={styles.section}>
             <Text style={styles.sectionLabel}>Your Trip</Text>
 
             <Pressable style={styles.locationRow} onPress={() => setPickerFor("pickup")}>
@@ -448,7 +448,7 @@ export default function BookScreen() {
 
           {/* Fare estimate */}
           {km > 0 && (
-            <Animated.View entering={FadeInDown.springify()} style={styles.fareCard}>
+            <Animated.View style={styles.fareCard}>
               <View>
                 <Text style={styles.fareAmount}>{fareStr(km)}</Text>
                 <Text style={styles.fareSub}>
@@ -463,7 +463,7 @@ export default function BookScreen() {
           )}
 
           {/* Notes */}
-          <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.section}>
+          <Animated.View style={styles.section}>
             <Text style={styles.sectionLabel}>Notes for driver (optional)</Text>
             <TextInput
               style={[styles.inputRow, styles.notesInput]}

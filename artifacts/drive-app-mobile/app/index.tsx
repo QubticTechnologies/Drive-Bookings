@@ -1,8 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 
 import COLORS from "@/constants/colors";
 import { useApp } from "@/contexts/AppContext";
@@ -44,15 +43,9 @@ function GRMark({ size = 72 }: { size?: number }) {
 }
 
 export default function RootIndex() {
-  const { role, driverId, activeRideId } = useApp();
-  const [ready, setReady] = useState(false);
+  const { role, hydrated, driverId, activeRideId } = useApp();
 
-  useEffect(() => {
-    const t = setTimeout(() => setReady(true), 400);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!ready) {
+  if (!hydrated) {
     return (
       <View style={styles.splash}>
         <LinearGradient
@@ -61,17 +54,16 @@ export default function RootIndex() {
           start={{ x: 0.2, y: 0 }}
           end={{ x: 0.8, y: 0.7 }}
         />
-
-        <Animated.View entering={FadeIn.duration(600)} style={styles.logoWrap}>
+        <View style={styles.logoWrap}>
           <GRMark size={72} />
-          <Animated.View entering={FadeInDown.delay(200).springify()} style={{ alignItems: "center", marginTop: 20 }}>
+          <View style={{ alignItems: "center", marginTop: 20 }}>
             <Text style={styles.logoText}>GoRide</Text>
             <Text style={styles.tagline}>
               Go Further<Text style={{ color: COLORS.gold }}>.</Text>
             </Text>
-          </Animated.View>
+          </View>
           <ActivityIndicator color={COLORS.accent} style={{ marginTop: 44 }} />
-        </Animated.View>
+        </View>
       </View>
     );
   }
