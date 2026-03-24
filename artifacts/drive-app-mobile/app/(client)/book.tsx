@@ -353,7 +353,7 @@ export default function BookScreen() {
         >
           {/* Header */}
           <View style={styles.headerRow}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Pressable onPress={() => { if (router.canGoBack()) router.back(); }} style={styles.backBtn}>
               <Feather name="arrow-left" size={22} color={COLORS.text} />
             </Pressable>
             <View>

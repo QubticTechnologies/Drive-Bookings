@@ -28,7 +28,8 @@ export default function GuestScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const handleBack = () => {
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace("/(auth)/");
   };
 
   const handleContinue = () => {
@@ -107,7 +108,7 @@ export default function GuestScreen() {
           <Text style={styles.continueBtnText}>{t.continueNow}</Text>
         </Pressable>
 
-        <Pressable style={styles.signupBtn} onPress={() => router.back()}>
+        <Pressable style={styles.signupBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(auth)/")}>
           <Text style={styles.signupBtnText}>Create account instead</Text>
         </Pressable>
       </View>

@@ -133,7 +133,7 @@ export default function TrackScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: botPad + 24 }}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(client)/book")} style={styles.backBtn}>
             <Feather name="arrow-left" size={22} color={COLORS.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Ride #{ride.id}</Text>

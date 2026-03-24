@@ -58,7 +58,7 @@ export default function DriverLoginScreen() {
     >
       <View style={[styles.container, { paddingTop: topPad + 20, paddingBottom: botPad + 20 }]}>
         {/* Back */}
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(auth)/")} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 

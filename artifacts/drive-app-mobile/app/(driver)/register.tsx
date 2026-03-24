@@ -135,7 +135,7 @@ export default function RegisterScreen() {
       >
         {/* Header */}
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace("/(driver)/")} style={styles.backBtn}>
             <Feather name="arrow-left" size={22} color={COLORS.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
