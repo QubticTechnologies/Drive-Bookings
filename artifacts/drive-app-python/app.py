@@ -3,6 +3,7 @@ import string
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
+from streamlit_js_eval import get_geolocation
 from datetime import datetime
 import time
 import db
@@ -200,6 +201,11 @@ _defaults = {
     "client_otp_type": "",           # "phone" | "email"
     "client_auth_step": "hub",       # hub|phone_entry|email_entry|otp|guest_entry|social_entry
     "client_social_provider": "",    # google|apple
+    # Location picker state
+    "pickup_lat": None, "pickup_lng": None, "pickup_label": "",
+    "dropoff_lat": None, "dropoff_lng": None, "dropoff_label": "",
+    "pickup_search_results": [], "dropoff_search_results": [],
+    "route_info": None,
 }
 for key, default in _defaults.items():
     if key not in st.session_state:
@@ -648,6 +654,7 @@ def page_client_profile():
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLIENT – BOOK RIDE
 # ═══════════════════════════════════════════════════════════════════════════════
+
 NASSAU_PLACES = {
     "✈️  Airport & Port": [
         ("Lynden Pindling Int'l Airport",            25.0389, -77.4659, "Main international airport"),
@@ -710,8 +717,109 @@ def _all_place_names():
     return names
 
 
+def _location_picker(key_prefix: str, label: str, allow_gps: bool = True):
+    """
+    Interactive location picker — GPS · Nominatim search · Landmark · Paste link/coords.
+    Returns (lat, lng, label_string). All three may be None/empty until user picks.
+    """
+    modes = []
+    if allow_gps:
+        modes.append("📍 My Location (GPS)")
+    modes += ["🔍 Search Address", "🏛️ Famous Landmark", "📋 Paste Link / Coords"]
+
+    mode = st.radio(label, modes, horizontal=True, key=f"{key_prefix}_mode",
+                    label_visibility="visible")
+
+    lat = st.session_state.get(f"{key_prefix}_lat")
+    lng = st.session_state.get(f"{key_prefix}_lng")
+    lbl = st.session_state.get(f"{key_prefix}_label", "")
+
+    # ── GPS ──────────────────────────────────────────────────────────────────
+    if mode == "📍 My Location (GPS)":
+        geo = get_geolocation(key=f"geo_{key_prefix}")
+        if geo and geo.get("coords"):
+            new_lat = round(geo["coords"]["latitude"], 6)
+            new_lng = round(geo["coords"]["longitude"], 6)
+            acc = geo["coords"].get("accuracy", 0)
+            if (new_lat, new_lng) != (lat, lng):
+                with st.spinner("Identifying your address…"):
+                    address = db.reverse_geocode(new_lat, new_lng)
+                st.session_state[f"{key_prefix}_lat"] = new_lat
+                st.session_state[f"{key_prefix}_lng"] = new_lng
+                st.session_state[f"{key_prefix}_label"] = address
+                lat, lng, lbl = new_lat, new_lng, address
+            if lat:
+                st.success(f"📍 **{lbl}** *(GPS ±{acc:.0f} m)*")
+        else:
+            st.info("🔐 Click **Allow** when your browser asks for location access. "
+                    "Works on HTTPS and deployed servers.")
+
+    # ── Nominatim search ─────────────────────────────────────────────────────
+    elif mode == "🔍 Search Address":
+        col_q, col_btn = st.columns([5, 1])
+        query = col_q.text_input(
+            "Search", placeholder="e.g. Atlantis Resort, Fish Fry, Carmichael Road…",
+            key=f"{key_prefix}_search_q", label_visibility="collapsed")
+        search_clicked = col_btn.button("Go", key=f"{key_prefix}_search_btn")
+
+        if search_clicked and query.strip():
+            with st.spinner("Searching…"):
+                results = db.geocode_address(query.strip())
+            st.session_state[f"{key_prefix}_search_results"] = results
+
+        results = st.session_state.get(f"{key_prefix}_search_results", [])
+        if results:
+            options = {r["display_name"][:80]: r for r in results}
+            sel = st.selectbox("Select:", list(options.keys()),
+                               key=f"{key_prefix}_search_sel")
+            r = options[sel]
+            new_lat = round(float(r["lat"]), 6)
+            new_lng = round(float(r["lon"]), 6)
+            short = sel.split(",")[0].strip()
+            st.session_state[f"{key_prefix}_lat"] = new_lat
+            st.session_state[f"{key_prefix}_lng"] = new_lng
+            st.session_state[f"{key_prefix}_label"] = short
+            lat, lng, lbl = new_lat, new_lng, short
+            st.caption(f"✅ {short} · {new_lat:.5f}, {new_lng:.5f}")
+        elif search_clicked:
+            st.warning("No results. Try a broader search term.")
+
+    # ── Famous landmark ───────────────────────────────────────────────────────
+    elif mode == "🏛️ Famous Landmark":
+        place_names = [n for n in _all_place_names() if not n.startswith("──")]
+        default_idx = place_names.index(lbl) if lbl in place_names else 0
+        chosen = st.selectbox("Select landmark:", place_names, index=default_idx,
+                              key=f"{key_prefix}_landmark_sel")
+        plat, plng = _get_place_coords(chosen)
+        st.session_state[f"{key_prefix}_lat"] = plat
+        st.session_state[f"{key_prefix}_lng"] = plng
+        st.session_state[f"{key_prefix}_label"] = chosen
+        lat, lng, lbl = plat, plng, chosen
+        st.caption(f"✅ {chosen} · {plat:.5f}, {plng:.5f}")
+
+    # ── Paste link / coords ───────────────────────────────────────────────────
+    elif mode == "📋 Paste Link / Coords":
+        paste = st.text_input(
+            "Paste Google Maps / Apple Maps link or coordinates",
+            placeholder="25.0872, -77.3149   or   https://maps.google.com/...",
+            key=f"{key_prefix}_paste")
+        if paste.strip():
+            plat, plng = db.parse_location_input(paste.strip())
+            if plat and plng:
+                with st.spinner("Identifying address…"):
+                    address = db.reverse_geocode(plat, plng)
+                st.session_state[f"{key_prefix}_lat"] = plat
+                st.session_state[f"{key_prefix}_lng"] = plng
+                st.session_state[f"{key_prefix}_label"] = address
+                lat, lng, lbl = plat, plng, address
+                st.success(f"📌 **{address}** · ({plat:.5f}, {plng:.5f})")
+            else:
+                st.error("Could not read location. Try format: `25.0800, -77.3420`")
+
+    return lat, lng, lbl
+
+
 def page_client_book():
-    # Guard: must be authenticated
     if st.session_state.mode != "client" or not st.session_state.client_auth_method:
         st.session_state.client_auth_step = "hub"
         nav("client_auth")
@@ -720,123 +828,144 @@ def page_client_book():
     method = st.session_state.client_auth_method
     client_name_prefill = st.session_state.client_name
     client_phone_prefill = st.session_state.client_phone
-
-    # Profile strip at top
     method_icon = {"phone": "📱", "email": "✉️", "google": "🔵", "apple": "🍎", "guest": "👤"}.get(method, "👤")
+
     st.markdown(f"""
-<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,194,212,0.07);border:1px solid rgba(0,194,212,0.18);border-radius:10px;padding:12px 20px;margin-bottom:20px;">
+<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,194,212,0.07);border:1px solid rgba(0,194,212,0.18);border-radius:10px;padding:12px 20px;margin-bottom:12px;">
   <span>{method_icon} <strong>{client_name_prefill or 'Guest'}</strong> &nbsp;·&nbsp; {method.capitalize()} sign-in</span>
   <span style="font-size:12px;color:#6b9aa2;">{client_phone_prefill or st.session_state.client_email or ''}</span>
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown(f"## 🚖 {t('book_btn').replace('🚖 ', '')}")
+    st.markdown("## 🚖 Request a Ride")
 
-    lang_info = LANG[st.session_state.client_lang]
-    st.markdown(f"Safe, reliable rides across Nassau — for **visitors & locals** alike. **Fares in USD.**  {lang_info['flag']} *{lang_info['name']}*")
-
-    # Quick routes
-    st.markdown("**Popular Routes — click to auto-fill:**")
-    route_cols = st.columns(len(QUICK_ROUTES))
-    for i, (label, pickup, dropoff) in enumerate(QUICK_ROUTES):
-        with route_cols[i]:
-            if st.button(label, use_container_width=True, key=f"qr_{i}"):
-                st.session_state._quick_pickup = pickup
-                st.session_state._quick_dropoff = dropoff
-                st.rerun()
-
-    default_pickup = st.session_state.get("_quick_pickup", "Lynden Pindling Int'l Airport")
-    default_dropoff = st.session_state.get("_quick_dropoff", "Parliament Square")
-
-    all_names = _all_place_names()
-    pickup_names = [n for n in all_names if not n.startswith("──")]
-    dropoff_names = pickup_names.copy()
+    # ── Quick routes ──────────────────────────────────────────────────────────
+    with st.expander("⚡ Popular Routes — click to auto-fill", expanded=False):
+        qcols = st.columns(len(QUICK_ROUTES))
+        for i, (qlabel, qpickup, qdropoff) in enumerate(QUICK_ROUTES):
+            with qcols[i]:
+                if st.button(qlabel, use_container_width=True, key=f"qr_{i}"):
+                    for places in NASSAU_PLACES.values():
+                        for p in places:
+                            if p[0] == qpickup:
+                                st.session_state.pickup_lat = p[1]
+                                st.session_state.pickup_lng = p[2]
+                                st.session_state.pickup_label = qpickup
+                            if p[0] == qdropoff:
+                                st.session_state.dropoff_lat = p[1]
+                                st.session_state.dropoff_lng = p[2]
+                                st.session_state.dropoff_label = qdropoff
+                    st.rerun()
 
     st.divider()
-    info_col, form_col = st.columns([1, 2])
 
-    with info_col:
-        st.markdown("#### 🌴 Welcome to Nassau")
-        st.markdown("""
-**Before you ride:**
-- 💵 All fares in US Dollars (USD)  
-- 📱 Driver will call/text when nearby  
-- 🏷️ Fare confirmed at drop-off  
-- 🧾 Invoice generated automatically  
-- 🔒 Licensed & insured drivers  
-- ⏱️ Avg wait: 5–10 minutes  
+    # ── Location pickers (side by side) ──────────────────────────────────────
+    left_col, right_col = st.columns(2)
+    with left_col:
+        st.markdown("#### 📍 Pickup Location")
+        p_lat, p_lng, p_label = _location_picker("pickup", "Set pickup via:", allow_gps=True)
+    with right_col:
+        st.markdown("#### 🏁 Drop-off Location")
+        d_lat, d_lng, d_label = _location_picker("dropoff", "Set drop-off via:", allow_gps=False)
 
-**First time here?**  
-- Airport → Cable Beach: ~25 min  
-- Airport → Atlantis: ~30 min  
-- Cruise Port → Straw Market: walking distance  
+    st.divider()
 
-**Currency:** BSD = USD (1:1). USD accepted everywhere.  
-**Tipping:** Not required, but appreciated.
-        """)
-
-    with form_col:
-        with st.form("book_form"):
-            st.markdown("**Your Details**")
-            c1, c2 = st.columns(2)
-            client_name = c1.text_input(t("enter_name"), value=client_name_prefill, placeholder=t("name_ph"))
-            client_phone = c2.text_input(
-                t("enter_phone"), value=client_phone_prefill, placeholder=t("phone_ph"),
-                help="Include country code if international, e.g. +44, +1")
-
-            st.markdown("**Your Trip**")
-            c3, c4 = st.columns(2)
-
-            pickup_idx = pickup_names.index(default_pickup) if default_pickup in pickup_names else 0
-            dropoff_idx = dropoff_names.index(default_dropoff) if default_dropoff in dropoff_names else 5
-
-            pickup_name  = c3.selectbox("📍 Pickup Location",  pickup_names,  index=pickup_idx)
-            dropoff_name = c4.selectbox("🏁 Drop-off Location", dropoff_names, index=dropoff_idx)
-
-            st.markdown("**Notes for your driver** *(optional)*")
-            col_notes, col_quick = st.columns([2, 1])
-            notes = col_notes.text_area("", placeholder="E.g. I'm at the south entrance with luggage…",
-                                        height=90, label_visibility="collapsed")
-            with col_quick:
-                st.caption("Quick notes:")
-                quick_notes = []
-                if st.checkbox("🧳 Have luggage"):     quick_notes.append("I have luggage 🧳")
-                if st.checkbox("👶 Baby seat needed"): quick_notes.append("Baby seat needed 👶")
-                if st.checkbox("♿ Wheelchair access"): quick_notes.append("Wheelchair access needed ♿")
-                if st.checkbox("🚪 At main entrance"): quick_notes.append("I'll be at the main entrance 🚪")
-            all_notes = "\n".join(filter(None, [notes] + quick_notes))
-
-            p_lat, p_lng = _get_place_coords(pickup_name)
-            d_lat, d_lng = _get_place_coords(dropoff_name)
-            dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
-            fare = db.calc_fare(dist)
-            fare_col1, fare_col2 = st.columns([1, 1])
-            fare_col1.metric("Estimated Fare", db.fmt_usd(fare))
-            fare_col2.metric("Distance", f"{dist:.1f} km")
-            st.caption(f"$3.00 base + ${fare - 3:.2f} distance · Final fare confirmed at drop-off")
-
-            submitted = st.form_submit_button(t("book_btn"), use_container_width=True, type="primary")
-
-        if submitted:
-            if not client_name or not client_phone:
-                st.error(f"Please enter your name and phone number.")
-            elif pickup_name == dropoff_name:
-                st.error("Pickup and drop-off must be different locations.")
+    # ── Live route map ────────────────────────────────────────────────────────
+    if p_lat and d_lat:
+        map_col, info_col = st.columns([3, 1])
+        with map_col:
+            m = folium.Map(
+                location=[(p_lat + d_lat) / 2, (p_lng + d_lng) / 2],
+                zoom_start=13, tiles="CartoDB dark_matter",
+            )
+            route = db.get_route(p_lat, p_lng, d_lat, d_lng)
+            if route:
+                folium.PolyLine(route["coords"], color="#00C2D4", weight=5,
+                                opacity=0.9, tooltip="Your road route").add_to(m)
+                st.session_state.route_info = route
             else:
-                ride = db.create_ride(
-                    client_name, client_phone,
-                    pickup_name, p_lat, p_lng,
-                    dropoff_name, d_lat, d_lng,
-                    all_notes,
-                )
-                st.session_state.client_name = client_name
-                st.session_state.client_phone = client_phone
-                st.session_state.ride_id = ride["id"]
-                st.session_state._quick_pickup = None
-                st.session_state._quick_dropoff = None
-                st.success(f"Ride requested! Estimate: {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
-                time.sleep(1)
-                nav("client_track")
+                folium.PolyLine([[p_lat, p_lng], [d_lat, d_lng]], color="#FFC72C",
+                                weight=3, opacity=0.6, dash_array="8").add_to(m)
+                st.session_state.route_info = None
+
+            folium.Marker([p_lat, p_lng], tooltip=f"📍 {p_label}",
+                          icon=folium.Icon(color="blue", icon="circle", prefix="fa")).add_to(m)
+            folium.Marker([d_lat, d_lng], tooltip=f"🏁 {d_label}",
+                          icon=folium.Icon(color="green", icon="flag", prefix="fa")).add_to(m)
+            m.fit_bounds(
+                [[min(p_lat, d_lat), min(p_lng, d_lng)],
+                 [max(p_lat, d_lat), max(p_lng, d_lng)]],
+                padding=(40, 40),
+            )
+            st_folium(m, height=320, use_container_width=True)
+
+        with info_col:
+            ri = st.session_state.route_info
+            if ri:
+                dist = ri["distance_km"]
+                fare = db.calc_fare(dist)
+                st.metric("🗺 Road Distance", f"{dist:.1f} km")
+                st.metric("⏱ Est. Drive", f"{ri['duration_min']:.0f} min")
+                st.metric("💵 Est. Fare", db.fmt_usd(fare))
+                st.caption("Via OSRM road routing · Final fare at drop-off")
+            else:
+                dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
+                fare = db.calc_fare(dist)
+                st.metric("📏 Distance", f"{dist:.1f} km")
+                st.metric("💵 Est. Fare", db.fmt_usd(fare))
+                st.caption("Straight-line fallback")
+            st.write("")
+            st.markdown(f"**📍** {p_label}")
+            st.markdown(f"**🏁** {d_label}")
+    else:
+        st.info("Set both your **pickup** and **drop-off** location above to see the route map and fare estimate.")
+        dist, fare = 0, 0
+
+    st.divider()
+
+    # ── Booking form ──────────────────────────────────────────────────────────
+    st.markdown("#### 👤 Your Details")
+    with st.form("book_form"):
+        c1, c2 = st.columns(2)
+        client_name = c1.text_input(t("enter_name"), value=client_name_prefill, placeholder=t("name_ph"))
+        client_phone = c2.text_input(t("enter_phone"), value=client_phone_prefill, placeholder=t("phone_ph"),
+                                     help="Include country code if international, e.g. +1, +44")
+        col_notes, col_quick = st.columns([2, 1])
+        notes = col_notes.text_area("Notes for driver *(optional)*",
+                                    placeholder="E.g. At the south entrance with two bags…", height=80)
+        with col_quick:
+            st.caption("Quick tags:")
+            quick_notes = []
+            if st.checkbox("🧳 Luggage"):           quick_notes.append("I have luggage 🧳")
+            if st.checkbox("👶 Baby seat"):          quick_notes.append("Baby seat needed 👶")
+            if st.checkbox("♿ Wheelchair access"):  quick_notes.append("Wheelchair access needed ♿")
+            if st.checkbox("🚪 Main entrance"):      quick_notes.append("At the main entrance 🚪")
+        all_notes = "\n".join(filter(None, [notes] + quick_notes))
+        submitted = st.form_submit_button(
+            t("book_btn"), use_container_width=True, type="primary",
+            disabled=(not p_lat or not d_lat))
+
+    if submitted:
+        if not client_name.strip() or not client_phone.strip():
+            st.error("Please enter your name and phone number.")
+        elif not p_lat or not d_lat:
+            st.error("Please set both pickup and drop-off locations.")
+        elif (round(p_lat, 4), round(p_lng, 4)) == (round(d_lat, 4), round(d_lng, 4)):
+            st.error("Pickup and drop-off appear to be the same location.")
+        else:
+            ride = db.create_ride(
+                client_name.strip(), client_phone.strip(),
+                p_label, p_lat, p_lng,
+                d_label, d_lat, d_lng,
+                all_notes,
+            )
+            st.session_state.client_name = client_name.strip()
+            st.session_state.client_phone = client_phone.strip()
+            st.session_state.ride_id = ride["id"]
+            st.session_state.route_info = None
+            st.success(f"Ride requested! {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+            time.sleep(1)
+            nav("client_track")
 
     st.write("")
     cp1, cp2 = st.columns(2)

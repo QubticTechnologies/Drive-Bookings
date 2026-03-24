@@ -1,11 +1,18 @@
 import os
+import re
 import math
+import requests
 import psycopg2
 import psycopg2.extras
 from datetime import datetime
 
 BASE_FARE = 3.0
 PER_KM = 1.50
+NOMINATIM_URL = "https://nominatim.openstreetmap.org"
+OSRM_URL = "http://router.project-osrm.org/route/v1/driving"
+HEADERS = {"User-Agent": "GoRide-Nassau/1.0 (contact@goride.bs)"}
+# Nassau / New Providence bounding box
+NASSAU_BBOX = "-77.7,24.85,-77.0,25.25"
 
 
 def get_conn():
@@ -30,6 +37,117 @@ def calc_fare(km: float) -> float:
 
 def fmt_usd(amount: float) -> str:
     return f"${amount:,.2f}"
+
+
+# ── Geocoding (OpenStreetMap Nominatim — no API key, works on any server) ─────
+
+def geocode_address(query: str, restrict_to_nassau: bool = True) -> list:
+    """Search for an address. Returns list of dicts with lat, lon, display_name."""
+    try:
+        params = {
+            "q": query + (", Nassau Bahamas" if restrict_to_nassau and "bahamas" not in query.lower() else ""),
+            "format": "json",
+            "limit": 6,
+            "addressdetails": 1,
+        }
+        if restrict_to_nassau:
+            params["bounded"] = 0
+            params["countrycodes"] = "bs"
+        resp = requests.get(f"{NOMINATIM_URL}/search", params=params,
+                            headers=HEADERS, timeout=6)
+        return resp.json()
+    except Exception:
+        return []
+
+
+def reverse_geocode(lat: float, lng: float) -> str:
+    """Convert coordinates to a human-readable address string."""
+    try:
+        resp = requests.get(
+            f"{NOMINATIM_URL}/reverse",
+            params={"lat": lat, "lon": lng, "format": "json", "zoom": 17},
+            headers=HEADERS, timeout=6,
+        )
+        data = resp.json()
+        addr = data.get("address", {})
+        parts = []
+        for key in ("road", "suburb", "city", "county", "state"):
+            if addr.get(key):
+                parts.append(addr[key])
+                if len(parts) >= 3:
+                    break
+        return ", ".join(parts) if parts else data.get("display_name", f"{lat:.5f}, {lng:.5f}")
+    except Exception:
+        return f"{lat:.5f}, {lng:.5f}"
+
+
+def parse_location_input(text: str):
+    """
+    Parse coordinates or map links pasted by the user.
+    Supports:
+      - "25.0800, -77.3420"
+      - Google Maps: maps.google.com/...@25.08,-77.34  or  ?q=25.08,-77.34
+      - Apple Maps:  maps.apple.com/?ll=25.08,-77.34
+      - Any URL with lat,lng in it
+    Returns (lat, lng) floats or (None, None).
+    """
+    text = text.strip()
+
+    # Raw "lat, lng" or "lat,lng"
+    m = re.match(r"^(-?\d{1,3}\.?\d*)[,\s]+(-?\d{1,3}\.?\d*)$", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # Google Maps @lat,lng,zoom
+    m = re.search(r"@(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # ?q=lat,lng  or  ?ll=lat,lng
+    m = re.search(r"[?&](?:q|ll)=(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # place/lat,lng
+    m = re.search(r"place/[^/]*/(-?\d+\.?\d+),(-?\d+\.?\d+)", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    # fallback: any two decimals that look like lat/lng for Nassau
+    m = re.search(r"(2[45]\.\d+)[^\d-]+(-77\.\d+)", text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    return None, None
+
+
+# ── Road Routing (OSRM — free, no key, works on any server) ──────────────────
+
+def get_route(lat1: float, lng1: float, lat2: float, lng2: float):
+    """
+    Get the actual driving route between two points via OSRM.
+    Returns dict with:
+      - coords: list of (lat, lng) tuples for the polyline
+      - distance_km: road distance in km
+      - duration_min: estimated drive time in minutes
+    Returns None on failure.
+    """
+    try:
+        url = f"{OSRM_URL}/{lng1},{lat1};{lng2},{lat2}"
+        resp = requests.get(url, params={"overview": "full", "geometries": "geojson"},
+                            timeout=8)
+        data = resp.json()
+        if data.get("code") == "Ok":
+            route = data["routes"][0]
+            coords = [(c[1], c[0]) for c in route["geometry"]["coordinates"]]
+            return {
+                "coords": coords,
+                "distance_km": route["distance"] / 1000,
+                "duration_min": route["duration"] / 60,
+            }
+    except Exception:
+        pass
+    return None
 
 
 # ── Drivers ──────────────────────────────────────────────────────────────────
