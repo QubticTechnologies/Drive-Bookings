@@ -446,6 +446,9 @@ export default function BookScreen() {
   const [dropoff, setDropoff] = useState<Place | null>(null);
   const [notes, setNotes] = useState("");
   const [pickerFor, setPickerFor] = useState<"pickup" | "dropoff" | null>(null);
+  const [bookMode, setBookMode] = useState<"now" | "later">("now");
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
 
   const km = pickup && dropoff ? haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng) : 0;
 
@@ -464,6 +467,13 @@ export default function BookScreen() {
 
   const handleBook = () => {
     if (!name || !phone || !pickup || !dropoff) return;
+    let scheduledAt: string | undefined;
+    if (bookMode === "later") {
+      if (!schedDate || !schedTime) return;
+      const isoStr = `${schedDate}T${schedTime}`;
+      if (new Date(isoStr) <= new Date()) return;
+      scheduledAt = isoStr;
+    }
     createRide({
       data: {
         clientName: name,
@@ -475,13 +485,15 @@ export default function BookScreen() {
         dropoffLat: dropoff.lat,
         dropoffLng: dropoff.lng,
         notes,
-      },
+        ...(scheduledAt ? { scheduledAt } : {}),
+      } as any,
     });
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const canBook = !!(name && phone && pickup && dropoff && !isPending);
+  const schedValid = bookMode === "now" || (schedDate.length === 10 && schedTime.length >= 5 && new Date(`${schedDate}T${schedTime}`) > new Date());
+  const canBook = !!(name && phone && pickup && dropoff && !isPending && schedValid);
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
@@ -630,6 +642,53 @@ export default function BookScreen() {
               ))}
             </ScrollView>
           </Animated.View>
+
+          {/* Booking mode */}
+          <Animated.View style={[styles.section, { marginBottom: 32 }]}>
+            <Text style={styles.sectionLabel}>When do you need the ride?</Text>
+            <View style={styles.bookModeRow}>
+              <Pressable
+                style={[styles.bookModeBtn, bookMode === "now" && styles.bookModeBtnActive]}
+                onPress={() => { setBookMode("now"); Haptics.selectionAsync(); }}
+              >
+                <Ionicons name="flash" size={16} color={bookMode === "now" ? "#050d0f" : COLORS.textSub} />
+                <Text style={[styles.bookModeTxt, bookMode === "now" && styles.bookModeTxtActive]}>Book Now</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.bookModeBtn, bookMode === "later" && styles.bookModeBtnActive]}
+                onPress={() => { setBookMode("later"); Haptics.selectionAsync(); }}
+              >
+                <Ionicons name="calendar-outline" size={16} color={bookMode === "later" ? "#050d0f" : COLORS.textSub} />
+                <Text style={[styles.bookModeTxt, bookMode === "later" && styles.bookModeTxtActive]}>Schedule</Text>
+              </Pressable>
+            </View>
+            {bookMode === "now" && (
+              <Text style={styles.bookModeHint}>⚡ Immediate pickup · avg 3-min wait in Nassau</Text>
+            )}
+            {bookMode === "later" && (
+              <View style={{ marginTop: 12, gap: 10 }}>
+                <TextInput
+                  style={styles.inputRow}
+                  placeholder="Date — YYYY-MM-DD"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={schedDate}
+                  onChangeText={setSchedDate}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                />
+                <TextInput
+                  style={styles.inputRow}
+                  placeholder="Time — HH:MM  (24h, e.g. 09:00)"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={schedTime}
+                  onChangeText={setSchedTime}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+                <Text style={styles.bookModeHint}>✅ Guaranteed availability · up to 30 days ahead</Text>
+              </View>
+            )}
+          </Animated.View>
         </ScrollView>
 
         {/* Book button */}
@@ -639,9 +698,13 @@ export default function BookScreen() {
             onPress={handleBook}
             disabled={!canBook}
           >
-            <Ionicons name="car-sport" size={20} color={canBook ? COLORS.bg : COLORS.textMuted} />
+            <Ionicons
+              name={bookMode === "later" ? "calendar" : "car-sport"}
+              size={20}
+              color={canBook ? COLORS.bg : COLORS.textMuted}
+            />
             <Text style={[styles.bookBtnText, !canBook && { color: COLORS.textMuted }]}>
-              {isPending ? "Requesting…" : "Request Ride Now"}
+              {isPending ? "Requesting…" : bookMode === "later" ? "Confirm Scheduled Ride" : "Request Ride Now"}
             </Text>
           </Pressable>
         </View>
@@ -695,6 +758,12 @@ const styles = StyleSheet.create({
   fareInfoText: { fontSize: 11, fontFamily: "Inter_400Regular", color: COLORS.textSub },
   noteChip: { paddingHorizontal: 12, paddingVertical: 7, backgroundColor: COLORS.card, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, marginRight: 8 },
   noteChipText: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub },
+  bookModeRow: { flexDirection: "row", gap: 10 },
+  bookModeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.card },
+  bookModeBtnActive: { backgroundColor: "#00C2D4", borderColor: "#00C2D4" },
+  bookModeTxt: { fontSize: 14, fontFamily: "Inter_500Medium", color: COLORS.textSub },
+  bookModeTxtActive: { color: "#050d0f" },
+  bookModeHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub, marginTop: 8 },
   bookBar: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: COLORS.bg, borderTopWidth: 1, borderTopColor: COLORS.border },
   bookBtn: { backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   bookBtnDisabled: { backgroundColor: COLORS.card },

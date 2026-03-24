@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { MapPin, Navigation, User, Phone, Luggage, Info, ChevronDown, Zap } from "lucide-react";
+import { MapPin, Navigation, User, Phone, Luggage, Info, ChevronDown, Zap, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCreateRide } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
@@ -184,6 +184,8 @@ export default function ClientBook() {
     dropoffLocation: "",
     notes: ""
   });
+  const [bookMode, setBookMode] = useState<"now" | "later">("now");
+  const [scheduledAt, setScheduledAt] = useState("");
 
   const pickupCoords  = useMemo(() => getCoords(formData.pickupLocation),  [formData.pickupLocation]);
   const dropoffCoords = useMemo(() => getCoords(formData.dropoffLocation), [formData.dropoffLocation]);
@@ -218,6 +220,16 @@ export default function ClientBook() {
       toast({ title: "Same location", description: "Pickup and drop-off must be different.", variant: "destructive" });
       return;
     }
+    if (bookMode === "later") {
+      if (!scheduledAt) {
+        toast({ title: "No time selected", description: "Please choose a pickup date and time.", variant: "destructive" });
+        return;
+      }
+      if (new Date(scheduledAt) <= new Date()) {
+        toast({ title: "Invalid time", description: "Scheduled pickup must be in the future.", variant: "destructive" });
+        return;
+      }
+    }
     createMutation.mutate({
       data: {
         clientName: formData.clientName,
@@ -229,7 +241,8 @@ export default function ClientBook() {
         dropoffLat: dropoffCoords.lat,
         dropoffLng: dropoffCoords.lng,
         notes: formData.notes,
-      }
+        ...(bookMode === "later" && scheduledAt ? { scheduledAt } : {}),
+      } as any
     });
   };
 
@@ -243,6 +256,17 @@ export default function ClientBook() {
       notes: f.notes ? `${f.notes}\n${snippet}` : snippet
     }));
   };
+
+  const minScheduled = (() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 30);
+    return d.toISOString().slice(0, 16);
+  })();
+  const maxScheduled = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 16);
+  })();
 
   const canSubmit = formData.clientName && formData.clientPhone && formData.pickupLocation && formData.dropoffLocation;
 
@@ -331,6 +355,43 @@ export default function ClientBook() {
                 />
               </div>
 
+              {/* Booking mode toggle */}
+              <div>
+                <label className="text-sm font-medium text-foreground/80 ml-1 mb-2 block">When do you need the ride?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBookMode("now")}
+                    className={`flex items-center gap-2 justify-center px-4 py-3 rounded-xl border text-sm font-medium transition-all ${bookMode === "now" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                  >
+                    <Zap className="w-4 h-4" />⚡ Book Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBookMode("later")}
+                    className={`flex items-center gap-2 justify-center px-4 py-3 rounded-xl border text-sm font-medium transition-all ${bookMode === "later" ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                  >
+                    <Clock className="w-4 h-4" />📅 Schedule
+                  </button>
+                </div>
+                {bookMode === "now" && (
+                  <p className="text-xs text-primary/80 mt-2 ml-1">⚡ Immediate pickup — average <strong>3-minute</strong> wait in Nassau</p>
+                )}
+                {bookMode === "later" && (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      min={minScheduled}
+                      max={maxScheduled}
+                      onChange={e => setScheduledAt(e.target.value)}
+                      className="w-full bg-input/50 border border-primary/40 rounded-xl px-4 py-3 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground ml-1">✅ Guaranteed availability · Schedule up to 30 days ahead</p>
+                  </div>
+                )}
+              </div>
+
               {/* Notes */}
               <div>
                 <label className="text-sm font-medium text-foreground/80 ml-1 mb-2 block">Notes for your driver <span className="text-muted-foreground font-normal">(optional)</span></label>
@@ -386,8 +447,8 @@ export default function ClientBook() {
                   isLoading={createMutation.isPending}
                   disabled={!canSubmit}
                 >
-                  <Zap className="w-4 h-4 mr-2" />
-                  {canSubmit ? "Request Ride Now" : "Fill in all fields above"}
+                  {bookMode === "later" ? <Clock className="w-4 h-4 mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+                  {!canSubmit ? "Fill in all fields above" : bookMode === "later" ? "Confirm Scheduled Ride" : "Request Ride Now"}
                 </Button>
               </div>
             </form>

@@ -58,6 +58,7 @@ function formatRide(ride: typeof ridesTable.$inferSelect, driver?: typeof driver
     estimatedFare: ride.estimatedFare,
     finalFare: ride.finalFare,
     notes: ride.notes,
+    scheduledAt: ride.scheduledAt,
     createdAt: ride.createdAt,
     acceptedAt: ride.acceptedAt,
     startedAt: ride.startedAt,
@@ -99,7 +100,7 @@ router.get("/rides", async (req, res) => {
 
 router.post("/rides", async (req, res) => {
   try {
-    const { clientName, clientPhone, pickupLocation, pickupLat, pickupLng, dropoffLocation, dropoffLat, dropoffLng, notes } = req.body;
+    const { clientName, clientPhone, pickupLocation, pickupLat, pickupLng, dropoffLocation, dropoffLat, dropoffLng, notes, scheduledAt } = req.body;
     if (!clientName || !clientPhone || !pickupLocation || pickupLat == null || pickupLng == null || !dropoffLocation || dropoffLat == null || dropoffLng == null) {
       return res.status(400).json({ error: "Missing required fields" });
     }
@@ -124,6 +125,8 @@ router.post("/rides", async (req, res) => {
       distanceKm,
       estimatedFare,
       notes: notes || null,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      status: scheduledAt && new Date(scheduledAt) > new Date() ? "scheduled" : "pending",
     }).returning();
 
     return res.status(201).json(formatRide(ride, null));
@@ -161,7 +164,7 @@ router.patch("/rides/:rideId/status", async (req, res) => {
     if (!existingRide) return res.status(404).json({ error: "Ride not found" });
 
     const { status, driverId } = req.body;
-    const validStatuses = ["accepted", "in_progress", "completed", "cancelled"];
+    const validStatuses = ["scheduled", "pending", "accepted", "in_progress", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }

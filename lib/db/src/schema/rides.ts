@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { driversTable } from "./drivers";
 
-export const rideStatusEnum = pgEnum("ride_status", ["pending", "accepted", "in_progress", "completed", "cancelled"]);
+export const rideStatusEnum = pgEnum("ride_status", ["pending", "accepted", "in_progress", "completed", "cancelled", "scheduled"]);
 
 export const ridesTable = pgTable("rides", {
   id: serial("id").primaryKey(),
@@ -21,6 +21,7 @@ export const ridesTable = pgTable("rides", {
   estimatedFare: real("estimated_fare").notNull().default(0),
   finalFare: real("final_fare"),
   notes: text("notes"),
+  scheduledAt: timestamp("scheduled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   acceptedAt: timestamp("accepted_at"),
   startedAt: timestamp("started_at"),

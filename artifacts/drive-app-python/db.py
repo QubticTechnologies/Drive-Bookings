@@ -266,9 +266,10 @@ def get_ride(ride_id: int):
 def create_ride(client_name, client_phone,
                 pickup_location, pickup_lat, pickup_lng,
                 dropoff_location, dropoff_lat, dropoff_lng,
-                notes=""):
+                notes="", scheduled_at=None):
     km = haversine(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng)
     fare = calc_fare(km)
+    status = "scheduled" if (scheduled_at and scheduled_at > datetime.utcnow()) else "pending"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
@@ -276,13 +277,13 @@ def create_ride(client_name, client_phone,
                   (client_name, client_phone,
                    pickup_location, pickup_lat, pickup_lng,
                    dropoff_location, dropoff_lat, dropoff_lng,
-                   distance_km, estimated_fare, notes)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   distance_km, estimated_fare, notes, scheduled_at, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING *
             """, (client_name, client_phone,
                   pickup_location, pickup_lat, pickup_lng,
                   dropoff_location, dropoff_lat, dropoff_lng,
-                  round(km, 3), fare, notes))
+                  round(km, 3), fare, notes, scheduled_at, status))
             return cur.fetchone()
 
 

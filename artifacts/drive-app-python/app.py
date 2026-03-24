@@ -4,7 +4,7 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from streamlit_js_eval import get_geolocation
-from datetime import datetime
+from datetime import datetime, date, time as dtime, timedelta
 import time
 import db
 
@@ -958,6 +958,34 @@ def page_client_book():
 
     st.divider()
 
+    # ── Booking type ───────────────────────────────────────────────────────────
+    st.markdown("#### 🕐 When do you need the ride?")
+    book_mode = st.radio(
+        "Booking type:", ["⚡ Book Now — Immediate pickup", "📅 Schedule for Later"],
+        horizontal=True, label_visibility="collapsed",
+    )
+
+    scheduled_at = None
+    if book_mode == "📅 Schedule for Later":
+        today = date.today()
+        max_date = today + timedelta(days=30)
+        sched_cols = st.columns(2)
+        pickup_date = sched_cols[0].date_input(
+            "Pickup Date", value=today + timedelta(days=1),
+            min_value=today, max_value=max_date,
+        )
+        pickup_time_raw = sched_cols[1].time_input("Pickup Time", value=dtime(9, 0), step=1800)
+        scheduled_at = datetime.combine(pickup_date, pickup_time_raw)
+        st.info(
+            f"📅 Scheduled for **{pickup_date.strftime('%A, %B %d')}** at "
+            f"**{pickup_time_raw.strftime('%I:%M %p')}**  \n"
+            "✅ Guaranteed availability · Reminder sent 1 hour before pickup"
+        )
+    else:
+        st.success("⚡ Immediate booking — average **3-minute** pickup in Nassau")
+
+    st.divider()
+
     # ── Booking form ──────────────────────────────────────────────────────────
     st.markdown("#### 👤 Your Details")
     with st.form("book_form"):
@@ -976,8 +1004,9 @@ def page_client_book():
             if st.checkbox("♿ Wheelchair access"):  quick_notes.append("Wheelchair access needed ♿")
             if st.checkbox("🚪 Main entrance"):      quick_notes.append("At the main entrance 🚪")
         all_notes = "\n".join(filter(None, [notes] + quick_notes))
+        btn_label = "📅 Confirm Schedule" if book_mode == "📅 Schedule for Later" else t("book_btn")
         submitted = st.form_submit_button(
-            t("book_btn"), use_container_width=True, type="primary",
+            btn_label, use_container_width=True, type="primary",
             disabled=(not p_lat or not d_lat))
 
     if submitted:
@@ -987,12 +1016,15 @@ def page_client_book():
             st.error("Please set both pickup and drop-off locations.")
         elif (round(p_lat, 4), round(p_lng, 4)) == (round(d_lat, 4), round(d_lng, 4)):
             st.error("Pickup and drop-off appear to be the same location.")
+        elif book_mode == "📅 Schedule for Later" and scheduled_at <= datetime.now():
+            st.error("Scheduled pickup time must be in the future.")
         else:
             ride = db.create_ride(
                 client_name.strip(), client_phone.strip(),
                 p_label, p_lat, p_lng,
                 d_label, d_lat, d_lng,
                 all_notes,
+                scheduled_at=scheduled_at,
             )
             st.session_state.client_name = client_name.strip()
             st.session_state.client_phone = client_phone.strip()
@@ -1032,13 +1064,15 @@ def page_client_track():
 
     STATUS_MAP = {
         "en": {
-            "pending":     ("⏳", "Pending",        "Waiting for a driver..."),
-            "accepted":    ("🚗", "Driver Assigned", "Your driver is on the way!"),
-            "in_progress": ("🚀", "In Progress",     "You're on your way!"),
-            "completed":   ("✅", "Completed",       "You've arrived. Enjoy your day!"),
-            "cancelled":   ("❌", "Cancelled",       "This ride was cancelled."),
+            "scheduled":   ("📅", "Scheduled",       "Your ride is confirmed for the scheduled time."),
+            "pending":     ("⏳", "Pending",          "Waiting for a driver..."),
+            "accepted":    ("🚗", "Driver Assigned",  "Your driver is on the way!"),
+            "in_progress": ("🚀", "In Progress",      "You're on your way!"),
+            "completed":   ("✅", "Completed",        "You've arrived. Enjoy your day!"),
+            "cancelled":   ("❌", "Cancelled",        "This ride was cancelled."),
         },
         "es": {
+            "scheduled":   ("📅", "Programado",      "Su viaje está confirmado para la hora programada."),
             "pending":     ("⏳", "Pendiente",        "Esperando un conductor..."),
             "accepted":    ("🚗", "Conductor Asignado", "¡Tu conductor va en camino!"),
             "in_progress": ("🚀", "En Curso",          "¡Estás en camino!"),
@@ -1046,6 +1080,7 @@ def page_client_track():
             "cancelled":   ("❌", "Cancelado",         "Este viaje fue cancelado."),
         },
         "fr": {
+            "scheduled":   ("📅", "Planifié",           "Votre trajet est confirmé pour l'heure prévue."),
             "pending":     ("⏳", "En attente",         "En attente d'un chauffeur..."),
             "accepted":    ("🚗", "Chauffeur Assigné",  "Votre chauffeur est en route !"),
             "in_progress": ("🚀", "En Cours",           "Vous êtes en route !"),
@@ -1063,6 +1098,18 @@ def page_client_track():
         st.metric("Status", f"{icon} {label}")
         st.metric("Estimated Fare", db.fmt_usd(ride["estimated_fare"]))
         st.metric("Distance", f"{ride['distance_km']:.1f} km")
+        if ride.get("scheduled_at"):
+            sched = ride["scheduled_at"]
+            now   = datetime.utcnow()
+            delta = sched - now
+            if delta.total_seconds() > 0:
+                hours   = int(delta.total_seconds() // 3600)
+                minutes = int((delta.total_seconds() % 3600) // 60)
+                countdown = f"in {hours}h {minutes}m" if hours else f"in {minutes}m"
+            else:
+                countdown = "now"
+            st.metric("📅 Scheduled Pickup", sched.strftime("%b %d, %I:%M %p"), delta_color="off")
+            st.caption(f"Pickup {countdown}")
         if ride["driver_name"]:
             st.markdown(f"🚗 **Driver:** {ride['driver_name']}")
             st.markdown(f"🔖 **Plate:** {ride['driver_plate']}")
@@ -1325,13 +1372,15 @@ def page_office_dashboard():
     all_rides = db.get_all_rides()
     pending   = [r for r in all_rides if r["status"] == "pending"]
     active    = [r for r in all_rides if r["status"] in ("accepted", "in_progress")]
+    scheduled = [r for r in all_rides if r["status"] == "scheduled"]
     available_drivers = [d for d in drivers if d["status"] == "available"]
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Drivers",  len(drivers))
-    c2.metric("Available",      len(available_drivers))
-    c3.metric("Pending Rides",  len(pending))
-    c4.metric("Active Rides",   len(active))
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total Drivers",    len(drivers))
+    c2.metric("Available",        len(available_drivers))
+    c3.metric("Pending Rides",    len(pending))
+    c4.metric("Active Rides",     len(active))
+    c5.metric("📅 Scheduled",     len(scheduled))
 
     st.divider()
 
@@ -1445,6 +1494,37 @@ def page_office_dashboard():
 
     # ── PANEL ─────────────────────────────────────────────────────────────────
     with panel_col:
+        st.markdown("#### 📅 Scheduled Rides")
+        if not scheduled:
+            st.caption("No upcoming scheduled rides.")
+        else:
+            for ride in sorted(scheduled, key=lambda r: r.get("scheduled_at") or datetime.max):
+                sched = ride.get("scheduled_at")
+                with st.container(border=True):
+                    if sched:
+                        delta = sched - datetime.utcnow()
+                        hours = int(delta.total_seconds() // 3600)
+                        mins  = int((delta.total_seconds() % 3600) // 60)
+                        when  = sched.strftime("%b %d · %I:%M %p")
+                        countdown = f"⏱ {hours}h {mins}m away" if delta.total_seconds() > 0 else "⚠️ Overdue"
+                        st.markdown(f"**{when}** &nbsp; {countdown}")
+                    st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
+                    st.caption(f"📍 {ride['pickup_location']}")
+                    st.caption(f"🏁 {ride['dropoff_location']}")
+                    st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km")
+                    if available_drivers:
+                        driver_options = {f"{d['name']} — {d['vehicle_plate']}": d["id"] for d in available_drivers}
+                        chosen_label = st.selectbox(
+                            "Assign driver", list(driver_options.keys()), key=f"sched_sel_{ride['id']}")
+                        if st.button("Confirm & Dispatch →", key=f"sched_dispatch_{ride['id']}",
+                                     type="primary", use_container_width=True):
+                            chosen_id = driver_options[chosen_label]
+                            db.update_ride_status(ride["id"], "accepted", chosen_id)
+                            st.success(f"Scheduled ride dispatched to {chosen_label.split(' — ')[0]}!")
+                            st.rerun()
+                    else:
+                        st.warning("No available drivers right now.")
+
         st.markdown("#### ⏳ Pending Bookings")
 
         if not pending:
