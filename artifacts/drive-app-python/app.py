@@ -1,3 +1,5 @@
+import random
+import string
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
@@ -12,16 +14,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── GoRide brand CSS — Bahamas national colors ─────────────────────────────────
+# ── GoRide brand CSS ────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Bahamas aquamarine #00C2D4 · gold #FFC72C */
 :root {
     --gr-aqua: #00C2D4;
     --gr-gold: #FFC72C;
     --gr-dark: #050d0f;
 }
-/* Primary buttons → aquamarine */
 .stButton > button[kind="primary"],
 .stFormSubmitButton > button[kind="primary"] {
     background-color: var(--gr-aqua) !important;
@@ -34,28 +34,182 @@ st.markdown("""
     background-color: #00a8b8 !important;
     border-color: #00a8b8 !important;
 }
-/* Links & active elements */
 a { color: var(--gr-aqua) !important; }
-/* Metric delta positive */
 [data-testid="stMetricDelta"] { color: var(--gr-aqua); }
-/* Divider */
 hr { border-color: rgba(0,194,212,0.18) !important; }
+
+/* Auth card styling */
+.auth-card {
+    background: linear-gradient(135deg, rgba(0,194,212,0.07) 0%, rgba(255,199,44,0.04) 100%);
+    border: 1px solid rgba(0,194,212,0.2);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin: 0 auto;
+}
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    color: #6b9aa2;
+    font-size: 13px;
+}
+.lang-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(0,194,212,0.12);
+    border: 1px solid rgba(0,194,212,0.3);
+    font-size: 13px;
+    color: #00C2D4;
+    cursor: pointer;
+}
 </style>
 """, unsafe_allow_html=True)
 
 ADMIN_PIN = "1234"
 NASSAU_CENTER = [25.0480, -77.3554]
 
+# ── Translations ──────────────────────────────────────────────────────────────
+LANG = {
+    "en": {
+        "name": "English", "flag": "🇬🇧",
+        "welcome": "Sign in to ride", "subtitle": "Nassau's premier ride-hailing platform",
+        "phone_btn": "📱 Continue with Phone",
+        "email_btn": "✉️ Continue with Email",
+        "google_btn": "Continue with Google",
+        "apple_btn": "Continue with Apple",
+        "guest_btn": "👤 Continue as Guest",
+        "guest_note": "No account needed · Perfect for tourists",
+        "enter_phone": "Phone number", "phone_ph": "+1 (242) 555-0100",
+        "enter_email": "Email address", "email_ph": "you@example.com",
+        "enter_name": "Your name", "name_ph": "Sarah Brown",
+        "name_optional": "Your name (optional for guest)",
+        "send_code": "Send Verification Code",
+        "otp_title": "Enter verification code",
+        "otp_sent_to": "We sent a 6-digit code to",
+        "otp_label": "6-digit code", "otp_ph": "000000",
+        "verify_btn": "Verify & Continue",
+        "resend": "Resend code", "back": "← Back",
+        "book_btn": "🚖 Book Now",
+        "verified_phone": "Phone verified! Welcome to GoRide 🎉",
+        "verified_email": "Email verified! Welcome to GoRide 🎉",
+        "wrong_code": "Incorrect code. Please try again.",
+        "guest_continue": "Continue as Guest",
+        "google_continue": "Continue",
+        "or": "or",
+        "signed_in_as": "Signed in as",
+        "auth_method": "via",
+        "profile_title": "Your Profile",
+        "sign_out": "Sign Out",
+        "book_another": "Book Another Ride",
+        "lang_select": "Language",
+        "dev_code_note": "Demo mode: your code is",
+        "social_email_label": "Email address", "social_name_label": "Display name",
+        "social_signin": "Sign In",
+    },
+    "es": {
+        "name": "Español", "flag": "🇪🇸",
+        "welcome": "Inicia sesión para viajar", "subtitle": "La plataforma líder de transporte en Nassau",
+        "phone_btn": "📱 Continuar con Teléfono",
+        "email_btn": "✉️ Continuar con Email",
+        "google_btn": "Continuar con Google",
+        "apple_btn": "Continuar con Apple",
+        "guest_btn": "👤 Continuar como Invitado",
+        "guest_note": "Sin cuenta requerida · Perfecto para turistas",
+        "enter_phone": "Número de teléfono", "phone_ph": "+1 (242) 555-0100",
+        "enter_email": "Correo electrónico", "email_ph": "tú@ejemplo.com",
+        "enter_name": "Tu nombre", "name_ph": "María García",
+        "name_optional": "Tu nombre (opcional para invitado)",
+        "send_code": "Enviar Código de Verificación",
+        "otp_title": "Ingresa el código de verificación",
+        "otp_sent_to": "Enviamos un código de 6 dígitos a",
+        "otp_label": "Código de 6 dígitos", "otp_ph": "000000",
+        "verify_btn": "Verificar y Continuar",
+        "resend": "Reenviar código", "back": "← Volver",
+        "book_btn": "🚖 Reservar Ahora",
+        "verified_phone": "¡Teléfono verificado! Bienvenido a GoRide 🎉",
+        "verified_email": "¡Email verificado! Bienvenido a GoRide 🎉",
+        "wrong_code": "Código incorrecto. Inténtalo de nuevo.",
+        "guest_continue": "Continuar como Invitado",
+        "google_continue": "Continuar",
+        "or": "o",
+        "signed_in_as": "Sesión iniciada como",
+        "auth_method": "vía",
+        "profile_title": "Tu Perfil",
+        "sign_out": "Cerrar Sesión",
+        "book_another": "Reservar Otro Viaje",
+        "lang_select": "Idioma",
+        "dev_code_note": "Modo demo: tu código es",
+        "social_email_label": "Correo electrónico", "social_name_label": "Nombre",
+        "social_signin": "Iniciar Sesión",
+    },
+    "fr": {
+        "name": "Français", "flag": "🇫🇷",
+        "welcome": "Connectez-vous pour voyager", "subtitle": "La principale plateforme de transport de Nassau",
+        "phone_btn": "📱 Continuer avec Téléphone",
+        "email_btn": "✉️ Continuer avec Email",
+        "google_btn": "Continuer avec Google",
+        "apple_btn": "Continuer avec Apple",
+        "guest_btn": "👤 Continuer en Invité",
+        "guest_note": "Aucun compte requis · Parfait pour les touristes",
+        "enter_phone": "Numéro de téléphone", "phone_ph": "+1 (242) 555-0100",
+        "enter_email": "Adresse email", "email_ph": "vous@exemple.com",
+        "enter_name": "Votre nom", "name_ph": "Marie Dupont",
+        "name_optional": "Votre nom (optionnel pour invité)",
+        "send_code": "Envoyer le Code de Vérification",
+        "otp_title": "Entrez le code de vérification",
+        "otp_sent_to": "Nous avons envoyé un code à 6 chiffres à",
+        "otp_label": "Code à 6 chiffres", "otp_ph": "000000",
+        "verify_btn": "Vérifier et Continuer",
+        "resend": "Renvoyer le code", "back": "← Retour",
+        "book_btn": "🚖 Réserver Maintenant",
+        "verified_phone": "Téléphone vérifié ! Bienvenue sur GoRide 🎉",
+        "verified_email": "Email vérifié ! Bienvenue sur GoRide 🎉",
+        "wrong_code": "Code incorrect. Veuillez réessayer.",
+        "guest_continue": "Continuer en Invité",
+        "google_continue": "Continuer",
+        "or": "ou",
+        "signed_in_as": "Connecté en tant que",
+        "auth_method": "via",
+        "profile_title": "Votre Profil",
+        "sign_out": "Se Déconnecter",
+        "book_another": "Réserver un Autre Trajet",
+        "lang_select": "Langue",
+        "dev_code_note": "Mode démo : votre code est",
+        "social_email_label": "Adresse email", "social_name_label": "Nom d'affichage",
+        "social_signin": "Se Connecter",
+    },
+}
+
 # ── Session state init ────────────────────────────────────────────────────────
-for key, default in {
-    "mode": None,       # "client" | "driver" | "office"
+_defaults = {
+    "mode": None,
     "page": "home",
     "driver_id": None,
     "ride_id": None,
     "pin_input": "",
-}.items():
+    # Client auth
+    "client_lang": "en",
+    "client_auth_method": None,      # phone|email|google|apple|guest
+    "client_name": "",
+    "client_phone": "",
+    "client_email": "",
+    "client_otp": "",                # generated code
+    "client_otp_contact": "",        # number/email that was used
+    "client_otp_type": "",           # "phone" | "email"
+    "client_auth_step": "hub",       # hub|phone_entry|email_entry|otp|guest_entry|social_entry
+    "client_social_provider": "",    # google|apple
+}
+for key, default in _defaults.items():
     if key not in st.session_state:
         st.session_state[key] = default
+
+
+def t(key):
+    """Get translation for current client language."""
+    lang = st.session_state.client_lang
+    return LANG.get(lang, LANG["en"]).get(key, LANG["en"].get(key, key))
 
 
 def nav(page, **kwargs):
@@ -71,6 +225,25 @@ def logout():
     st.session_state.driver_id = None
     st.session_state.ride_id = None
     st.rerun()
+
+
+def client_logout():
+    st.session_state.client_auth_method = None
+    st.session_state.client_name = ""
+    st.session_state.client_phone = ""
+    st.session_state.client_email = ""
+    st.session_state.client_otp = ""
+    st.session_state.client_otp_contact = ""
+    st.session_state.client_otp_type = ""
+    st.session_state.client_auth_step = "hub"
+    st.session_state.client_social_provider = ""
+    st.session_state.mode = None
+    st.session_state.ride_id = None
+    nav("home")
+
+
+def _gen_otp():
+    return "".join(random.choices(string.digits, k=6))
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -92,12 +265,19 @@ with col_mode:
         st.caption(f"🚗 Driver Mode — {drv['name'] if drv else ''}")
     elif st.session_state.mode == "office":
         st.caption("📡 Main Office")
-    elif st.session_state.mode == "client":
-        st.caption("👤 Client Mode")
+    elif st.session_state.mode == "client" and st.session_state.client_auth_method:
+        method_icon = {"phone": "📱", "email": "✉️", "google": "🔵", "apple": "🍎", "guest": "👤"}.get(
+            st.session_state.client_auth_method, "👤")
+        name = st.session_state.client_name or "Guest"
+        st.caption(f"{method_icon} {t('signed_in_as')} **{name}**")
 with col_logout:
     if st.session_state.mode:
-        if st.button("⬅ Exit", use_container_width=True):
-            logout()
+        if st.session_state.mode == "client":
+            if st.button("⬅ Exit", use_container_width=True):
+                client_logout()
+        else:
+            if st.button("⬅ Exit", use_container_width=True):
+                logout()
 
 st.divider()
 
@@ -118,11 +298,12 @@ def page_home():
 
     with col1:
         st.markdown("### 👤 Request a Ride")
-        st.write("Book a ride instantly. No account needed — just enter your pickup and drop-off.")
+        st.write("Sign in with phone, email, Google, Apple — or jump in as a guest. Multi-language support included.")
         st.write("")
         if st.button("🚖 Book Now", use_container_width=True, type="primary"):
             st.session_state.mode = "client"
-            nav("client_book")
+            st.session_state.client_auth_step = "hub"
+            nav("client_auth")
 
     with col2:
         st.markdown("### 🚗 Driver Login")
@@ -139,6 +320,623 @@ def page_home():
         st.write("")
         if st.button("🔒 Admin Login", use_container_width=True):
             nav("office_login")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLIENT AUTH — HUB
+# ═══════════════════════════════════════════════════════════════════════════════
+def _lang_switcher():
+    """Render compact language flag buttons."""
+    cols = st.columns(len(LANG))
+    for i, (code, info) in enumerate(LANG.items()):
+        with cols[i]:
+            active = "primary" if st.session_state.client_lang == code else "secondary"
+            label = f"{info['flag']} {info['name']}"
+            if st.button(label, key=f"lang_{code}", use_container_width=True,
+                         type="primary" if st.session_state.client_lang == code else "secondary"):
+                st.session_state.client_lang = code
+                st.rerun()
+
+
+def page_client_auth():
+    st.session_state.mode = "client"
+
+    # Language selector at top
+    with st.container():
+        lc1, lc2, lc3 = st.columns([2, 3, 2])
+        with lc2:
+            st.caption(t("lang_select"))
+            _lang_switcher()
+
+    st.write("")
+
+    step = st.session_state.client_auth_step
+
+    # ── OTP step ──────────────────────────────────────────────────────────────
+    if step == "otp":
+        _page_client_otp()
+        return
+
+    # ── Guest entry ───────────────────────────────────────────────────────────
+    if step == "guest_entry":
+        _page_client_guest()
+        return
+
+    # ── Social entry (Google / Apple) ─────────────────────────────────────────
+    if step == "social_entry":
+        _page_client_social()
+        return
+
+    # ── Phone entry ───────────────────────────────────────────────────────────
+    if step == "phone_entry":
+        _page_client_phone_entry()
+        return
+
+    # ── Email entry ───────────────────────────────────────────────────────────
+    if step == "email_entry":
+        _page_client_email_entry()
+        return
+
+    # ── Auth hub (default) ────────────────────────────────────────────────────
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.markdown(f"""
+<div style="text-align:center;margin-bottom:28px;">
+  <div style="font-size:48px;margin-bottom:8px;">🚖</div>
+  <h2 style="font-size:1.6rem;font-weight:800;letter-spacing:-0.5px;margin:0 0 4px 0;">{t('welcome')}</h2>
+  <p style="color:#6b9aa2;font-size:0.95rem;margin:0;">{t('subtitle')}</p>
+</div>
+""", unsafe_allow_html=True)
+
+        # Social login row
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            if st.button(f"🔵 {t('google_btn')}", use_container_width=True, key="auth_google"):
+                st.session_state.client_auth_step = "social_entry"
+                st.session_state.client_social_provider = "google"
+                st.rerun()
+        with sc2:
+            if st.button(f"🍎 {t('apple_btn')}", use_container_width=True, key="auth_apple"):
+                st.session_state.client_auth_step = "social_entry"
+                st.session_state.client_social_provider = "apple"
+                st.rerun()
+
+        st.markdown(f"""
+<div style="display:flex;align-items:center;gap:12px;margin:16px 0;color:#6b9aa2;font-size:13px;">
+  <hr style="flex:1;margin:0;border-color:rgba(0,194,212,0.2)!important;">
+  <span>{t('or')}</span>
+  <hr style="flex:1;margin:0;border-color:rgba(0,194,212,0.2)!important;">
+</div>
+""", unsafe_allow_html=True)
+
+        if st.button(t("phone_btn"), use_container_width=True, type="primary", key="auth_phone"):
+            st.session_state.client_auth_step = "phone_entry"
+            st.rerun()
+
+        if st.button(t("email_btn"), use_container_width=True, key="auth_email"):
+            st.session_state.client_auth_step = "email_entry"
+            st.rerun()
+
+        st.write("")
+        st.markdown("---")
+        if st.button(t("guest_btn"), use_container_width=True, key="auth_guest"):
+            st.session_state.client_auth_step = "guest_entry"
+            st.rerun()
+        st.markdown(f"<p style='text-align:center;font-size:12px;color:#6b9aa2;margin-top:4px;'>{t('guest_note')}</p>",
+                    unsafe_allow_html=True)
+
+    st.write("")
+    if st.button(t("back"), key="auth_back_home"):
+        st.session_state.mode = None
+        nav("home")
+
+
+# ── Phone entry ────────────────────────────────────────────────────────────────
+def _page_client_phone_entry():
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.markdown(f"### 📱 {t('phone_btn').replace('📱 ', '')}")
+        st.write("")
+
+        with st.form("phone_entry_form"):
+            name = st.text_input(t("enter_name"), placeholder=t("name_ph"))
+            phone = st.text_input(t("enter_phone"), placeholder=t("phone_ph"))
+            submitted = st.form_submit_button(t("send_code"), use_container_width=True, type="primary")
+
+        if submitted:
+            if not phone.strip():
+                st.error(t("enter_phone") + " is required.")
+            else:
+                code = _gen_otp()
+                st.session_state.client_otp = code
+                st.session_state.client_otp_contact = phone.strip()
+                st.session_state.client_otp_type = "phone"
+                st.session_state.client_name = name.strip()
+                st.session_state.client_phone = phone.strip()
+                st.session_state.client_auth_step = "otp"
+                st.rerun()
+
+        st.write("")
+        if st.button(t("back"), key="phone_back"):
+            st.session_state.client_auth_step = "hub"
+            st.rerun()
+
+
+# ── Email entry ────────────────────────────────────────────────────────────────
+def _page_client_email_entry():
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.markdown(f"### ✉️ {t('email_btn').replace('✉️ ', '')}")
+        st.write("")
+
+        with st.form("email_entry_form"):
+            name = st.text_input(t("enter_name"), placeholder=t("name_ph"))
+            email = st.text_input(t("enter_email"), placeholder=t("email_ph"))
+            submitted = st.form_submit_button(t("send_code"), use_container_width=True, type="primary")
+
+        if submitted:
+            if not email.strip() or "@" not in email:
+                st.error("Please enter a valid email address.")
+            else:
+                code = _gen_otp()
+                st.session_state.client_otp = code
+                st.session_state.client_otp_contact = email.strip()
+                st.session_state.client_otp_type = "email"
+                st.session_state.client_name = name.strip()
+                st.session_state.client_email = email.strip()
+                st.session_state.client_auth_step = "otp"
+                st.rerun()
+
+        st.write("")
+        if st.button(t("back"), key="email_back"):
+            st.session_state.client_auth_step = "hub"
+            st.rerun()
+
+
+# ── OTP verification ───────────────────────────────────────────────────────────
+def _page_client_otp():
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        contact = st.session_state.client_otp_contact
+        otp_type = st.session_state.client_otp_type
+
+        st.markdown(f"### 🔑 {t('otp_title')}")
+        st.write(f"{t('otp_sent_to')} **{contact}**")
+
+        # Demo mode: show the code
+        st.info(f"🧪 **{t('dev_code_note')}** `{st.session_state.client_otp}`", icon=None)
+        st.write("")
+
+        with st.form("otp_form"):
+            entered = st.text_input(t("otp_label"), placeholder=t("otp_ph"),
+                                    max_chars=6)
+            submitted = st.form_submit_button(t("verify_btn"), use_container_width=True, type="primary")
+
+        if submitted:
+            if entered.strip() == st.session_state.client_otp:
+                method = "phone" if otp_type == "phone" else "email"
+                st.session_state.client_auth_method = method
+                success_key = "verified_phone" if otp_type == "phone" else "verified_email"
+                st.success(t(success_key))
+                time.sleep(1)
+                nav("client_book")
+            else:
+                st.error(t("wrong_code"))
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button(t("back"), key="otp_back"):
+                prev = "phone_entry" if st.session_state.client_otp_type == "phone" else "email_entry"
+                st.session_state.client_auth_step = prev
+                st.rerun()
+        with c2:
+            if st.button(t("resend"), key="otp_resend"):
+                st.session_state.client_otp = _gen_otp()
+                st.rerun()
+
+
+# ── Guest entry ────────────────────────────────────────────────────────────────
+def _page_client_guest():
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.markdown(f"### 👤 {t('guest_btn').replace('👤 ', '')}")
+        st.write(t("guest_note"))
+        st.write("")
+
+        with st.form("guest_form"):
+            name = st.text_input(t("name_optional"), placeholder=t("name_ph"))
+            phone = st.text_input(t("enter_phone") + " *(optional)*", placeholder=t("phone_ph"))
+            submitted = st.form_submit_button(t("guest_continue"), use_container_width=True, type="primary")
+
+        if submitted:
+            st.session_state.client_auth_method = "guest"
+            st.session_state.client_name = name.strip() or "Guest"
+            st.session_state.client_phone = phone.strip()
+            st.success(f"Welcome, {st.session_state.client_name}! 🌴")
+            time.sleep(0.8)
+            nav("client_book")
+
+        st.write("")
+        if st.button(t("back"), key="guest_back"):
+            st.session_state.client_auth_step = "hub"
+            st.rerun()
+
+
+# ── Social (Google / Apple) ────────────────────────────────────────────────────
+def _page_client_social():
+    provider = st.session_state.client_social_provider
+    icon = "🔵" if provider == "google" else "🍎"
+    provider_name = "Google" if provider == "google" else "Apple"
+
+    _, center_col, _ = st.columns([1, 2, 1])
+    with center_col:
+        st.markdown(f"### {icon} {t('google_btn' if provider == 'google' else 'apple_btn')}")
+
+        st.markdown(f"""
+<div style="background:rgba(0,194,212,0.06);border:1px solid rgba(0,194,212,0.18);border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+  <p style="margin:0 0 8px 0;color:#6b9aa2;font-size:13px;">🔐 Simulated OAuth flow — {provider_name} sign-in</p>
+  <p style="margin:0;font-size:13px;">In production this would redirect to {provider_name}'s OAuth consent screen. Enter your details below to continue.</p>
+</div>
+""", unsafe_allow_html=True)
+
+        with st.form(f"social_form_{provider}"):
+            name = st.text_input(t("social_name_label"), placeholder=t("name_ph"))
+            email = st.text_input(t("social_email_label"), placeholder=t("email_ph"))
+            submitted = st.form_submit_button(
+                f"{icon} {t('social_signin')} {t('or').replace('or', 'with').replace('o', 'with').strip()}",
+                use_container_width=True, type="primary")
+
+        if submitted:
+            if not name.strip() or not email.strip():
+                st.error("Please enter your name and email.")
+            else:
+                with st.spinner(f"Connecting to {provider_name}..."):
+                    time.sleep(1)
+                st.session_state.client_auth_method = provider
+                st.session_state.client_name = name.strip()
+                st.session_state.client_email = email.strip()
+                st.success(f"{icon} {t('signed_in_as')} **{name.strip()}** 🎉")
+                time.sleep(1)
+                nav("client_book")
+
+        st.write("")
+        if st.button(t("back"), key="social_back"):
+            st.session_state.client_auth_step = "hub"
+            st.rerun()
+
+
+# ── Client Profile ─────────────────────────────────────────────────────────────
+def page_client_profile():
+    if st.session_state.mode != "client" or not st.session_state.client_auth_method:
+        nav("client_auth")
+        return
+
+    method = st.session_state.client_auth_method
+    method_labels = {"phone": "📱 Phone", "email": "✉️ Email",
+                     "google": "🔵 Google", "apple": "🍎 Apple", "guest": "👤 Guest"}
+    icon = {"phone": "📱", "email": "✉️", "google": "🔵", "apple": "🍎", "guest": "👤"}.get(method, "👤")
+
+    st.markdown(f"## {icon} {t('profile_title')}")
+
+    _, c, _ = st.columns([1, 2, 1])
+    with c:
+        with st.container(border=True):
+            st.markdown(f"### {st.session_state.client_name or 'Guest'}")
+            st.markdown(f"**{t('auth_method')}** {method_labels.get(method, method)}")
+            if st.session_state.client_phone:
+                st.markdown(f"📱 {st.session_state.client_phone}")
+            if st.session_state.client_email:
+                st.markdown(f"✉️ {st.session_state.client_email}")
+
+            if method == "guest":
+                st.info("You are in guest mode. Create an account to save your ride history.")
+            elif method in ("google", "apple"):
+                st.success(f"Account linked with {method.capitalize()}.")
+            else:
+                st.success("Account verified via OTP.")
+
+            st.write("")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(t("book_btn"), use_container_width=True, type="primary"):
+                    nav("client_book")
+            with c2:
+                if st.button(t("sign_out"), use_container_width=True):
+                    client_logout()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLIENT – BOOK RIDE
+# ═══════════════════════════════════════════════════════════════════════════════
+NASSAU_PLACES = {
+    "✈️  Airport & Port": [
+        ("Lynden Pindling Int'l Airport",            25.0389, -77.4659, "Main international airport"),
+        ("Nassau Cruise Port (Prince George Wharf)",  25.0811, -77.3513, "All cruise ships dock here"),
+    ],
+    "🏨  Hotels & Resorts": [
+        ("Atlantis Paradise Island",                  25.0872, -77.3149, "Iconic resort on Paradise Island"),
+        ("Baha Mar Resort (Cable Beach)",             25.0738, -77.4025, "Luxury resort complex"),
+        ("Sandals Royal Bahamian",                    25.0700, -77.3870, "Adults-only Cable Beach resort"),
+        ("British Colonial Hilton",                   25.0800, -77.3420, "Historic hotel, downtown"),
+        ("Comfort Suites Paradise Island",            25.0870, -77.3200, "Budget-friendly Paradise Island"),
+        ("Melia Nassau Beach Resort",                 25.0690, -77.3950, "Cable Beach"),
+    ],
+    "🏖️  Beaches": [
+        ("Cable Beach",                               25.0700, -77.3900, "Most popular tourist beach"),
+        ("Junkanoo Beach",                            25.0780, -77.3480, "Free beach near cruise port"),
+        ("Montagu Beach",                             25.0580, -77.3000, "Quiet local beach, east Nassau"),
+        ("Love Beach",                                25.0760, -77.4700, "Snorkelling spot, west Nassau"),
+        ("Goodman's Bay",                             25.0770, -77.3850, "Park & picnic beach"),
+    ],
+    "🏛️  Downtown Nassau": [
+        ("Parliament Square",                         25.0770, -77.3410, "City centre landmark"),
+        ("Straw Market (Bay Street)",                 25.0787, -77.3440, "Souvenirs & local crafts"),
+        ("Arawak Cay — Fish Fry",                    25.0800, -77.3600, "Best local seafood strip"),
+        ("Fort Charlotte",                            25.0790, -77.3650, "Historic fort & gardens"),
+        ("Nassau Harbour Club & Marina",              25.0820, -77.3300, "East bay waterfront"),
+    ],
+    "🏘️  Residential Areas": [
+        ("Sandyport",                                 25.0750, -77.4120, "Western gated community"),
+        ("Carmichael Road",                           25.0350, -77.4000, "South New Providence"),
+        ("Soldier Road",                              25.0500, -77.3400, "Eastern corridor"),
+        ("Village Road",                              25.0450, -77.3150, "Eastern suburbs"),
+        ("Lyford Cay",                                25.0300, -77.5300, "Exclusive western enclave"),
+    ],
+}
+
+QUICK_ROUTES = [
+    ("✈️ → 🏛️  Airport → Downtown",   "Lynden Pindling Int'l Airport",            "Parliament Square"),
+    ("🚢 → 🏨  Port → Atlantis",        "Nassau Cruise Port (Prince George Wharf)",  "Atlantis Paradise Island"),
+    ("✈️ → 🏨  Airport → Baha Mar",     "Lynden Pindling Int'l Airport",            "Baha Mar Resort (Cable Beach)"),
+    ("🚢 → 🏖️  Port → Cable Beach",    "Nassau Cruise Port (Prince George Wharf)",  "Cable Beach"),
+    ("🏖️ → 🍤  Beach → Fish Fry",      "Cable Beach",                               "Arawak Cay — Fish Fry"),
+]
+
+
+def _get_place_coords(name):
+    for places in NASSAU_PLACES.values():
+        for p in places:
+            if p[0] == name:
+                return p[1], p[2]
+    return 25.048, -77.355
+
+
+def _all_place_names():
+    names = []
+    for cat, places in NASSAU_PLACES.items():
+        names.append(f"── {cat} ──")
+        for p in places:
+            names.append(p[0])
+    return names
+
+
+def page_client_book():
+    # Guard: must be authenticated
+    if st.session_state.mode != "client" or not st.session_state.client_auth_method:
+        st.session_state.client_auth_step = "hub"
+        nav("client_auth")
+        return
+
+    method = st.session_state.client_auth_method
+    client_name_prefill = st.session_state.client_name
+    client_phone_prefill = st.session_state.client_phone
+
+    # Profile strip at top
+    method_icon = {"phone": "📱", "email": "✉️", "google": "🔵", "apple": "🍎", "guest": "👤"}.get(method, "👤")
+    st.markdown(f"""
+<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,194,212,0.07);border:1px solid rgba(0,194,212,0.18);border-radius:10px;padding:12px 20px;margin-bottom:20px;">
+  <span>{method_icon} <strong>{client_name_prefill or 'Guest'}</strong> &nbsp;·&nbsp; {method.capitalize()} sign-in</span>
+  <span style="font-size:12px;color:#6b9aa2;">{client_phone_prefill or st.session_state.client_email or ''}</span>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(f"## 🚖 {t('book_btn').replace('🚖 ', '')}")
+
+    lang_info = LANG[st.session_state.client_lang]
+    st.markdown(f"Safe, reliable rides across Nassau — for **visitors & locals** alike. **Fares in USD.**  {lang_info['flag']} *{lang_info['name']}*")
+
+    # Quick routes
+    st.markdown("**Popular Routes — click to auto-fill:**")
+    route_cols = st.columns(len(QUICK_ROUTES))
+    for i, (label, pickup, dropoff) in enumerate(QUICK_ROUTES):
+        with route_cols[i]:
+            if st.button(label, use_container_width=True, key=f"qr_{i}"):
+                st.session_state._quick_pickup = pickup
+                st.session_state._quick_dropoff = dropoff
+                st.rerun()
+
+    default_pickup = st.session_state.get("_quick_pickup", "Lynden Pindling Int'l Airport")
+    default_dropoff = st.session_state.get("_quick_dropoff", "Parliament Square")
+
+    all_names = _all_place_names()
+    pickup_names = [n for n in all_names if not n.startswith("──")]
+    dropoff_names = pickup_names.copy()
+
+    st.divider()
+    info_col, form_col = st.columns([1, 2])
+
+    with info_col:
+        st.markdown("#### 🌴 Welcome to Nassau")
+        st.markdown("""
+**Before you ride:**
+- 💵 All fares in US Dollars (USD)  
+- 📱 Driver will call/text when nearby  
+- 🏷️ Fare confirmed at drop-off  
+- 🧾 Invoice generated automatically  
+- 🔒 Licensed & insured drivers  
+- ⏱️ Avg wait: 5–10 minutes  
+
+**First time here?**  
+- Airport → Cable Beach: ~25 min  
+- Airport → Atlantis: ~30 min  
+- Cruise Port → Straw Market: walking distance  
+
+**Currency:** BSD = USD (1:1). USD accepted everywhere.  
+**Tipping:** Not required, but appreciated.
+        """)
+
+    with form_col:
+        with st.form("book_form"):
+            st.markdown("**Your Details**")
+            c1, c2 = st.columns(2)
+            client_name = c1.text_input(t("enter_name"), value=client_name_prefill, placeholder=t("name_ph"))
+            client_phone = c2.text_input(
+                t("enter_phone"), value=client_phone_prefill, placeholder=t("phone_ph"),
+                help="Include country code if international, e.g. +44, +1")
+
+            st.markdown("**Your Trip**")
+            c3, c4 = st.columns(2)
+
+            pickup_idx = pickup_names.index(default_pickup) if default_pickup in pickup_names else 0
+            dropoff_idx = dropoff_names.index(default_dropoff) if default_dropoff in dropoff_names else 5
+
+            pickup_name  = c3.selectbox("📍 Pickup Location",  pickup_names,  index=pickup_idx)
+            dropoff_name = c4.selectbox("🏁 Drop-off Location", dropoff_names, index=dropoff_idx)
+
+            st.markdown("**Notes for your driver** *(optional)*")
+            col_notes, col_quick = st.columns([2, 1])
+            notes = col_notes.text_area("", placeholder="E.g. I'm at the south entrance with luggage…",
+                                        height=90, label_visibility="collapsed")
+            with col_quick:
+                st.caption("Quick notes:")
+                quick_notes = []
+                if st.checkbox("🧳 Have luggage"):     quick_notes.append("I have luggage 🧳")
+                if st.checkbox("👶 Baby seat needed"): quick_notes.append("Baby seat needed 👶")
+                if st.checkbox("♿ Wheelchair access"): quick_notes.append("Wheelchair access needed ♿")
+                if st.checkbox("🚪 At main entrance"): quick_notes.append("I'll be at the main entrance 🚪")
+            all_notes = "\n".join(filter(None, [notes] + quick_notes))
+
+            p_lat, p_lng = _get_place_coords(pickup_name)
+            d_lat, d_lng = _get_place_coords(dropoff_name)
+            dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
+            fare = db.calc_fare(dist)
+            fare_col1, fare_col2 = st.columns([1, 1])
+            fare_col1.metric("Estimated Fare", db.fmt_usd(fare))
+            fare_col2.metric("Distance", f"{dist:.1f} km")
+            st.caption(f"$3.00 base + ${fare - 3:.2f} distance · Final fare confirmed at drop-off")
+
+            submitted = st.form_submit_button(t("book_btn"), use_container_width=True, type="primary")
+
+        if submitted:
+            if not client_name or not client_phone:
+                st.error(f"Please enter your name and phone number.")
+            elif pickup_name == dropoff_name:
+                st.error("Pickup and drop-off must be different locations.")
+            else:
+                ride = db.create_ride(
+                    client_name, client_phone,
+                    pickup_name, p_lat, p_lng,
+                    dropoff_name, d_lat, d_lng,
+                    all_notes,
+                )
+                st.session_state.client_name = client_name
+                st.session_state.client_phone = client_phone
+                st.session_state.ride_id = ride["id"]
+                st.session_state._quick_pickup = None
+                st.session_state._quick_dropoff = None
+                st.success(f"Ride requested! Estimate: {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+                time.sleep(1)
+                nav("client_track")
+
+    st.write("")
+    cp1, cp2 = st.columns(2)
+    with cp1:
+        if st.button(t("back"), key="book_back"):
+            nav("home")
+    with cp2:
+        if st.button(f"👤 {t('profile_title')}", key="book_profile"):
+            nav("client_profile")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLIENT – TRACK RIDE
+# ═══════════════════════════════════════════════════════════════════════════════
+def page_client_track():
+    ride_id = st.session_state.ride_id
+    if not ride_id:
+        st.warning("No active ride.")
+        nav("client_book")
+        return
+
+    ride = db.get_ride(ride_id)
+    if not ride:
+        st.error("Ride not found.")
+        nav("client_book")
+        return
+
+    lang_info = LANG[st.session_state.client_lang]
+
+    STATUS_MAP = {
+        "en": {
+            "pending":     ("⏳", "Pending",        "Waiting for a driver..."),
+            "accepted":    ("🚗", "Driver Assigned", "Your driver is on the way!"),
+            "in_progress": ("🚀", "In Progress",     "You're on your way!"),
+            "completed":   ("✅", "Completed",       "You've arrived. Enjoy your day!"),
+            "cancelled":   ("❌", "Cancelled",       "This ride was cancelled."),
+        },
+        "es": {
+            "pending":     ("⏳", "Pendiente",        "Esperando un conductor..."),
+            "accepted":    ("🚗", "Conductor Asignado", "¡Tu conductor va en camino!"),
+            "in_progress": ("🚀", "En Curso",          "¡Estás en camino!"),
+            "completed":   ("✅", "Completado",        "¡Has llegado! ¡Disfruta tu día!"),
+            "cancelled":   ("❌", "Cancelado",         "Este viaje fue cancelado."),
+        },
+        "fr": {
+            "pending":     ("⏳", "En attente",         "En attente d'un chauffeur..."),
+            "accepted":    ("🚗", "Chauffeur Assigné",  "Votre chauffeur est en route !"),
+            "in_progress": ("🚀", "En Cours",           "Vous êtes en route !"),
+            "completed":   ("✅", "Terminé",            "Vous êtes arrivé. Bonne journée !"),
+            "cancelled":   ("❌", "Annulé",             "Ce trajet a été annulé."),
+        },
+    }
+    lang_statuses = STATUS_MAP.get(st.session_state.client_lang, STATUS_MAP["en"])
+    icon, label, msg = lang_statuses.get(ride["status"], ("❓", ride["status"], ""))
+
+    st.markdown(f"## 📍 Ride #{ride['id']} — {label}  {lang_info['flag']}")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.metric("Status", f"{icon} {label}")
+        st.metric("Estimated Fare", db.fmt_usd(ride["estimated_fare"]))
+        st.metric("Distance", f"{ride['distance_km']:.1f} km")
+        if ride["driver_name"]:
+            st.markdown(f"🚗 **Driver:** {ride['driver_name']}")
+            st.markdown(f"🔖 **Plate:** {ride['driver_plate']}")
+
+    with col2:
+        st.info(msg)
+        c1, c2 = st.columns(2)
+        c1.markdown(f"**📍 Pickup**  \n{ride['pickup_location']}")
+        c2.markdown(f"**🏁 Drop-off**  \n{ride['dropoff_location']}")
+
+        m = folium.Map(
+            location=[ride["pickup_lat"], ride["pickup_lng"]],
+            zoom_start=13,
+            tiles="CartoDB dark_matter",
+        )
+        folium.Marker(
+            [ride["pickup_lat"], ride["pickup_lng"]],
+            tooltip="Pickup",
+            icon=folium.Icon(color="blue", icon="play"),
+        ).add_to(m)
+        folium.Marker(
+            [ride["dropoff_lat"], ride["dropoff_lng"]],
+            tooltip="Drop-off",
+            icon=folium.Icon(color="green", icon="flag"),
+        ).add_to(m)
+        st_folium(m, height=250, use_container_width=True)
+
+    if ride["status"] in ("completed", "cancelled"):
+        if st.button(t("book_another") if t("book_another") != "book_another" else "Book Another Ride",
+                     type="primary"):
+            st.session_state.ride_id = None
+            nav("client_book")
+    else:
+        if st.button("🔄 Refresh Status", use_container_width=True):
+            st.rerun()
+        st.caption("Page auto-refreshes every 8 seconds while ride is active.")
+        time.sleep(8)
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -242,7 +1040,6 @@ def page_driver_dashboard():
     my_active = [r for r in all_rides if r["driver_id"] == driver_id and r["status"] in ("accepted", "in_progress")]
     current_ride = my_active[0] if my_active else None
 
-    # Profile sidebar
     col_profile, col_main = st.columns([1, 2])
 
     with col_profile:
@@ -314,253 +1111,8 @@ def page_driver_dashboard():
                                 db.update_ride_status(ride["id"], "accepted", driver_id)
                                 st.rerun()
 
-    # Auto-refresh every 5s while online
     if driver["status"] == "available":
         time.sleep(5)
-        st.rerun()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLIENT – BOOK RIDE
-# ═══════════════════════════════════════════════════════════════════════════════
-NASSAU_PLACES = {
-    "✈️  Airport & Port": [
-        ("Lynden Pindling Int'l Airport",            25.0389, -77.4659, "Main international airport"),
-        ("Nassau Cruise Port (Prince George Wharf)",  25.0811, -77.3513, "All cruise ships dock here"),
-    ],
-    "🏨  Hotels & Resorts": [
-        ("Atlantis Paradise Island",                  25.0872, -77.3149, "Iconic resort on Paradise Island"),
-        ("Baha Mar Resort (Cable Beach)",             25.0738, -77.4025, "Luxury resort complex"),
-        ("Sandals Royal Bahamian",                    25.0700, -77.3870, "Adults-only Cable Beach resort"),
-        ("British Colonial Hilton",                   25.0800, -77.3420, "Historic hotel, downtown"),
-        ("Comfort Suites Paradise Island",            25.0870, -77.3200, "Budget-friendly Paradise Island"),
-        ("Melia Nassau Beach Resort",                 25.0690, -77.3950, "Cable Beach"),
-    ],
-    "🏖️  Beaches": [
-        ("Cable Beach",                               25.0700, -77.3900, "Most popular tourist beach"),
-        ("Junkanoo Beach",                            25.0780, -77.3480, "Free beach near cruise port"),
-        ("Montagu Beach",                             25.0580, -77.3000, "Quiet local beach, east Nassau"),
-        ("Love Beach",                                25.0760, -77.4700, "Snorkelling spot, west Nassau"),
-        ("Goodman's Bay",                             25.0770, -77.3850, "Park & picnic beach"),
-    ],
-    "🏛️  Downtown Nassau": [
-        ("Parliament Square",                         25.0770, -77.3410, "City centre landmark"),
-        ("Straw Market (Bay Street)",                 25.0787, -77.3440, "Souvenirs & local crafts"),
-        ("Arawak Cay — Fish Fry",                    25.0800, -77.3600, "Best local seafood strip"),
-        ("Fort Charlotte",                            25.0790, -77.3650, "Historic fort & gardens"),
-        ("Nassau Harbour Club & Marina",              25.0820, -77.3300, "East bay waterfront"),
-    ],
-    "🏘️  Residential Areas": [
-        ("Sandyport",                                 25.0750, -77.4120, "Western gated community"),
-        ("Carmichael Road",                           25.0350, -77.4000, "South New Providence"),
-        ("Soldier Road",                              25.0500, -77.3400, "Eastern corridor"),
-        ("Village Road",                              25.0450, -77.3150, "Eastern suburbs"),
-        ("Lyford Cay",                                25.0300, -77.5300, "Exclusive western enclave"),
-    ],
-}
-
-QUICK_ROUTES = [
-    ("✈️ → 🏛️  Airport → Downtown",   "Lynden Pindling Int'l Airport",            "Parliament Square"),
-    ("🚢 → 🏨  Port → Atlantis",        "Nassau Cruise Port (Prince George Wharf)",  "Atlantis Paradise Island"),
-    ("✈️ → 🏨  Airport → Baha Mar",     "Lynden Pindling Int'l Airport",            "Baha Mar Resort (Cable Beach)"),
-    ("🚢 → 🏖️  Port → Cable Beach",    "Nassau Cruise Port (Prince George Wharf)",  "Cable Beach"),
-    ("🏖️ → 🍤  Beach → Fish Fry",      "Cable Beach",                               "Arawak Cay — Fish Fry"),
-]
-
-def _get_place_coords(name):
-    for places in NASSAU_PLACES.values():
-        for p in places:
-            if p[0] == name:
-                return p[1], p[2]
-    return 25.048, -77.355
-
-def _all_place_names():
-    names = []
-    for cat, places in NASSAU_PLACES.items():
-        names.append(f"── {cat} ──")
-        for p in places:
-            names.append(p[0])
-    return names
-
-
-def page_client_book():
-    st.markdown("## 🚖 Where are you headed?")
-    st.markdown("Safe, reliable rides across Nassau — for **visitors & locals** alike. **Fares in USD.**")
-
-    # Quick routes
-    st.markdown("**Popular Routes — click to auto-fill:**")
-    route_cols = st.columns(len(QUICK_ROUTES))
-    for i, (label, pickup, dropoff) in enumerate(QUICK_ROUTES):
-        with route_cols[i]:
-            if st.button(label, use_container_width=True, key=f"qr_{i}"):
-                st.session_state._quick_pickup = pickup
-                st.session_state._quick_dropoff = dropoff
-                st.rerun()
-
-    # Pre-fill from quick route
-    default_pickup = st.session_state.get("_quick_pickup", "Lynden Pindling Int'l Airport")
-    default_dropoff = st.session_state.get("_quick_dropoff", "Parliament Square")
-
-    all_names = _all_place_names()
-    pickup_names = [n for n in all_names if not n.startswith("──")]
-    dropoff_names = pickup_names.copy()
-
-    st.divider()
-    info_col, form_col = st.columns([1, 2])
-
-    with info_col:
-        st.markdown("#### 🌴 Welcome to Nassau")
-        st.markdown("""
-**Before you ride:**
-- 💵 All fares in US Dollars (USD)  
-- 📱 Driver will call/text when nearby  
-- 🏷️ Fare confirmed at drop-off  
-- 🧾 Invoice generated automatically  
-- 🔒 Licensed & insured drivers  
-- ⏱️ Avg wait: 5–10 minutes  
-
-**First time here?**  
-- Airport → Cable Beach: ~25 min  
-- Airport → Atlantis: ~30 min  
-- Cruise Port → Straw Market: walking distance  
-
-**Currency:** BSD = USD (1:1). USD accepted everywhere.  
-**Tipping:** Not required, but appreciated.
-        """)
-
-    with form_col:
-        with st.form("book_form"):
-            st.markdown("**Your Details**")
-            c1, c2 = st.columns(2)
-            client_name = c1.text_input("Your Name", placeholder="Sarah Brown")
-            client_phone = c2.text_input("Phone Number", placeholder="+1 (242) 555-0199",
-                                         help="Include country code if international, e.g. +44, +1")
-
-            st.markdown("**Your Trip**")
-            c3, c4 = st.columns(2)
-
-            pickup_idx = pickup_names.index(default_pickup) if default_pickup in pickup_names else 0
-            dropoff_idx = dropoff_names.index(default_dropoff) if default_dropoff in dropoff_names else 5
-
-            pickup_name  = c3.selectbox("📍 Pickup Location",  pickup_names,  index=pickup_idx)
-            dropoff_name = c4.selectbox("🏁 Drop-off Location", dropoff_names, index=dropoff_idx)
-
-            st.markdown("**Notes for your driver** *(optional)*")
-            col_notes, col_quick = st.columns([2, 1])
-            notes = col_notes.text_area("", placeholder="E.g. I'm at the south entrance with luggage…", height=90, label_visibility="collapsed")
-            with col_quick:
-                st.caption("Quick notes:")
-                quick_notes = []
-                if st.checkbox("🧳 Have luggage"):     quick_notes.append("I have luggage 🧳")
-                if st.checkbox("👶 Baby seat needed"): quick_notes.append("Baby seat needed 👶")
-                if st.checkbox("♿ Wheelchair access"): quick_notes.append("Wheelchair access needed ♿")
-                if st.checkbox("🚪 At main entrance"): quick_notes.append("I'll be at the main entrance 🚪")
-            all_notes = "\n".join(filter(None, [notes] + quick_notes))
-
-            # Live fare preview inside form
-            p_lat, p_lng = _get_place_coords(pickup_name)
-            d_lat, d_lng = _get_place_coords(dropoff_name)
-            dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
-            fare = db.calc_fare(dist)
-            fare_col1, fare_col2 = st.columns([1, 1])
-            fare_col1.metric("Estimated Fare", db.fmt_usd(fare))
-            fare_col2.metric("Distance", f"{dist:.1f} km")
-            st.caption(f"$3.00 base + ${fare - 3:.2f} distance · Final fare confirmed at drop-off")
-
-            submitted = st.form_submit_button("🚖 Request Ride Now", use_container_width=True, type="primary")
-
-        if submitted:
-            if not client_name or not client_phone:
-                st.error("Please enter your name and phone number.")
-            elif pickup_name == dropoff_name:
-                st.error("Pickup and drop-off must be different locations.")
-            else:
-                ride = db.create_ride(
-                    client_name, client_phone,
-                    pickup_name, p_lat, p_lng,
-                    dropoff_name, d_lat, d_lng,
-                    all_notes,
-                )
-                st.session_state.ride_id = ride["id"]
-                st.session_state._quick_pickup = None
-                st.session_state._quick_dropoff = None
-                st.success(f"Ride requested! Estimate: {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
-                time.sleep(1)
-                nav("client_track")
-
-    if st.button("← Back to Home"):
-        nav("home")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLIENT – TRACK RIDE
-# ═══════════════════════════════════════════════════════════════════════════════
-def page_client_track():
-    ride_id = st.session_state.ride_id
-    if not ride_id:
-        st.warning("No active ride.")
-        nav("client_book")
-        return
-
-    ride = db.get_ride(ride_id)
-    if not ride:
-        st.error("Ride not found.")
-        nav("client_book")
-        return
-
-    st.markdown(f"## 📍 Ride #{ride['id']} — Status")
-
-    STATUS_MAP = {
-        "pending": ("⏳", "Pending", "Waiting for a driver..."),
-        "accepted": ("🚗", "Driver Assigned", "Your driver is on the way!"),
-        "in_progress": ("🚀", "In Progress", "You're on your way!"),
-        "completed": ("✅", "Completed", "You've arrived. Enjoy your day!"),
-        "cancelled": ("❌", "Cancelled", "This ride was cancelled."),
-    }
-    icon, label, msg = STATUS_MAP.get(ride["status"], ("❓", ride["status"], ""))
-
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.metric("Status", f"{icon} {label}")
-        st.metric("Estimated Fare", db.fmt_usd(ride["estimated_fare"]))
-        st.metric("Distance", f"{ride['distance_km']:.1f} km")
-        if ride["driver_name"]:
-            st.markdown(f"🚗 **Driver:** {ride['driver_name']}")
-            st.markdown(f"🔖 **Plate:** {ride['driver_plate']}")
-
-    with col2:
-        st.info(msg)
-        c1, c2 = st.columns(2)
-        c1.markdown(f"**📍 Pickup**  \n{ride['pickup_location']}")
-        c2.markdown(f"**🏁 Drop-off**  \n{ride['dropoff_location']}")
-
-        # Mini map
-        m = folium.Map(
-            location=[ride["pickup_lat"], ride["pickup_lng"]],
-            zoom_start=13,
-            tiles="CartoDB dark_matter",
-        )
-        folium.Marker(
-            [ride["pickup_lat"], ride["pickup_lng"]],
-            tooltip="Pickup",
-            icon=folium.Icon(color="blue", icon="play"),
-        ).add_to(m)
-        folium.Marker(
-            [ride["dropoff_lat"], ride["dropoff_lng"]],
-            tooltip="Drop-off",
-            icon=folium.Icon(color="green", icon="flag"),
-        ).add_to(m)
-        st_folium(m, height=250, use_container_width=True)
-
-    if ride["status"] in ("completed", "cancelled"):
-        if st.button("Book Another Ride", type="primary"):
-            st.session_state.ride_id = None
-            nav("client_book")
-    else:
-        if st.button("🔄 Refresh Status", use_container_width=True):
-            st.rerun()
-        st.caption("Page auto-refreshes every 8 seconds while ride is active.")
-        time.sleep(8)
         st.rerun()
 
 
@@ -605,7 +1157,6 @@ def page_office_dashboard():
     active = [r for r in all_rides if r["status"] in ("accepted", "in_progress")]
     available_drivers = [d for d in drivers if d["status"] == "available"]
 
-    # Stats
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Drivers", len(drivers))
     c2.metric("Available", len(available_drivers))
@@ -616,23 +1167,16 @@ def page_office_dashboard():
 
     map_col, panel_col = st.columns([3, 2])
 
-    # ── Live Map ──────────────────────────────────────────────────────────────
     with map_col:
         st.markdown("#### 🗺 Live Driver Map")
 
-        m = folium.Map(
-            location=NASSAU_CENTER,
-            zoom_start=13,
-            tiles="CartoDB dark_matter",
-        )
-
+        m = folium.Map(location=NASSAU_CENTER, zoom_start=13, tiles="CartoDB dark_matter")
         COLOR_MAP = {"available": "green", "busy": "orange", "offline": "gray"}
         STATUS_EMOJI = {"available": "🟢", "busy": "🟡", "offline": "⚫"}
 
         for d in drivers:
             lat = float(d["last_lat"]) if d["last_lat"] else (25.048 + (d["id"] * 0.003) % 0.12 - 0.06)
             lng = float(d["last_lng"]) if d["last_lng"] else (-77.355 + (d["id"] * 0.007) % 0.20 - 0.10)
-            color = COLOR_MAP.get(d["status"], "gray")
 
             updated = ""
             if d["last_location_updated_at"]:
@@ -647,9 +1191,7 @@ def page_office_dashboard():
             folium.CircleMarker(
                 location=[lat, lng],
                 radius=10 if d["status"] == "available" else 8,
-                color="#000",
-                weight=2,
-                fill=True,
+                color="#000", weight=2, fill=True,
                 fill_color={"available": "#10b981", "busy": "#f59e0b", "offline": "#6b7280"}.get(d["status"], "#6b7280"),
                 fill_opacity=1.0,
                 tooltip=folium.Tooltip(popup_html, sticky=True),
@@ -657,7 +1199,6 @@ def page_office_dashboard():
 
         st_folium(m, height=440, use_container_width=True)
 
-        # Fleet list
         st.markdown("#### 🚗 Fleet")
         if not drivers:
             st.caption("No drivers registered yet.")
@@ -669,7 +1210,6 @@ def page_office_dashboard():
                     f"· ⭐ {float(d['rating']):.1f} · {d['total_rides']} rides"
                 )
 
-    # ── Bookings Panel ────────────────────────────────────────────────────────
     with panel_col:
         st.markdown("#### ⏳ Pending Bookings")
 
@@ -688,11 +1228,9 @@ def page_office_dashboard():
                     if available_drivers:
                         driver_options = {f"{d['name']} — {d['vehicle_plate']}": d["id"] for d in available_drivers}
                         chosen_label = st.selectbox(
-                            "Assign driver",
-                            list(driver_options.keys()),
-                            key=f"sel_{ride['id']}",
-                        )
-                        if st.button(f"Dispatch →", key=f"dispatch_{ride['id']}", type="primary", use_container_width=True):
+                            "Assign driver", list(driver_options.keys()), key=f"sel_{ride['id']}")
+                        if st.button(f"Dispatch →", key=f"dispatch_{ride['id']}", type="primary",
+                                     use_container_width=True):
                             chosen_id = driver_options[chosen_label]
                             db.update_ride_status(ride["id"], "accepted", chosen_id)
                             st.success(f"Dispatched to {chosen_label.split(' — ')[0]}!")
@@ -713,7 +1251,6 @@ def page_office_dashboard():
                     if ride["driver_name"]:
                         st.caption(f"🚗 {ride['driver_name']} · {ride['driver_plate']}")
 
-    # Auto-refresh every 6s
     time.sleep(6)
     st.rerun()
 
@@ -725,6 +1262,14 @@ page = st.session_state.page
 
 if page == "home":
     page_home()
+elif page == "client_auth":
+    page_client_auth()
+elif page == "client_book":
+    page_client_book()
+elif page == "client_track":
+    page_client_track()
+elif page == "client_profile":
+    page_client_profile()
 elif page == "driver_register":
     page_driver_register()
 elif page == "driver_login":
@@ -734,10 +1279,6 @@ elif page == "driver_dashboard":
         page_driver_dashboard()
     else:
         nav("driver_login")
-elif page == "client_book":
-    page_client_book()
-elif page == "client_track":
-    page_client_track()
 elif page == "office_login":
     page_office_login()
 elif page == "office_dashboard":
