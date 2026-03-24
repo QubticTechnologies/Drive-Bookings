@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "@/constants/colors";
@@ -28,13 +28,13 @@ export default function GuestScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const handleBack = () => {
-    router.replace("/(auth)/");
+    router.back();
   };
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGuestMode(name.trim() || "Guest");
-    router.replace("/(client)/book");
+    router.replace("/");
   };
 
   const perks = [
@@ -61,16 +61,16 @@ export default function GuestScreen() {
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
-        <Animated.View entering={FadeIn.duration(300)} style={styles.hero}>
+        <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="person-outline" size={30} color={COLORS.text} />
           </View>
           <Text style={styles.title}>{t.guestTitle}</Text>
           <Text style={styles.sub}>{t.guestSubtitle}</Text>
-        </Animated.View>
+        </View>
 
         {/* Perks */}
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.perksCard}>
+        <View style={styles.perksCard}>
           {perks.map((p, i) => (
             <View key={p.text} style={[styles.perkRow, i < perks.length - 1 && styles.perkBorder]}>
               <View style={styles.perkIcon}>
@@ -79,10 +79,10 @@ export default function GuestScreen() {
               <Text style={styles.perkText}>{p.text}</Text>
             </View>
           ))}
-        </Animated.View>
+        </View>
 
         {/* Name (optional) */}
-        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.nameSection}>
+        <View style={styles.nameSection}>
           <Text style={styles.label}>{t.yourName}</Text>
           <View style={styles.inputWrap}>
             <Feather name="user" size={18} color={COLORS.textSub} />
@@ -97,7 +97,7 @@ export default function GuestScreen() {
               onSubmitEditing={handleContinue}
             />
           </View>
-        </Animated.View>
+        </View>
       </ScrollView>
 
       {/* Pinned bottom buttons — plain View, no animation so touches are never blocked */}
@@ -107,7 +107,7 @@ export default function GuestScreen() {
           <Text style={styles.continueBtnText}>{t.continueNow}</Text>
         </Pressable>
 
-        <Pressable style={styles.signupBtn} onPress={() => router.replace("/(auth)/phone")}>
+        <Pressable style={styles.signupBtn} onPress={() => router.back()}>
           <Text style={styles.signupBtnText}>Create account instead</Text>
         </Pressable>
       </View>

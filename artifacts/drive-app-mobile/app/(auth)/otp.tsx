@@ -44,7 +44,7 @@ export default function OtpScreen() {
       onSuccess: (user) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setRiderUser(user);
-        router.replace("/(client)/book");
+        router.replace("/");
       },
       onError: () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -94,7 +94,7 @@ export default function OtpScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
-        <Pressable onPress={() => router.replace("/(auth)/phone")} hitSlop={12} style={styles.back}>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
@@ -159,7 +159,7 @@ export default function OtpScreen() {
         {/* Wrong number / change */}
         <View style={styles.resendRow}>
           <Text style={styles.resendLabel}>{t.wrongNumber} </Text>
-          <Pressable onPress={() => router.replace("/(auth)/phone")} hitSlop={8}>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
             <Text style={styles.resendLink}>{t.change}</Text>
           </Pressable>
         </View>
