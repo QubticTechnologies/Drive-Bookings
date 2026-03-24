@@ -72,10 +72,7 @@ export default function PhoneScreen() {
     >
       <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
         <Pressable
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(auth)/");
-          }}
+          onPress={() => router.replace("/(auth)/")}
           hitSlop={12}
           style={styles.back}
         >

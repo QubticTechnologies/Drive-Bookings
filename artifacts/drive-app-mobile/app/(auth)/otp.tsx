@@ -93,7 +93,7 @@ export default function OtpScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
+        <Pressable onPress={() => router.replace("/(auth)/phone")} hitSlop={12} style={styles.back}>
           <Feather name="arrow-left" size={22} color={COLORS.text} />
         </Pressable>
 
@@ -162,7 +162,7 @@ export default function OtpScreen() {
         {/* Resend */}
         <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.resendRow}>
           <Text style={styles.resendLabel}>{t.wrongNumber} </Text>
-          <Pressable onPress={() => router.back()}>
+          <Pressable onPress={() => router.replace("/(auth)/phone")} hitSlop={8}>
             <Text style={styles.resendLink}>{t.change}</Text>
           </Pressable>
         </Animated.View>
