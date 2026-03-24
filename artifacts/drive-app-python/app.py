@@ -1313,45 +1313,113 @@ def page_office_dashboard():
         nav("office_login")
         return
 
+    STATUS_EMOJI = {"available": "🟢", "busy": "🟡", "offline": "⚫"}
+
+    # ── initialise session keys ────────────────────────────────────────────────
+    if "completed_report" not in st.session_state:
+        st.session_state.completed_report = None
+
     st.markdown("## 📡 Main Office — Dispatch Dashboard")
 
-    drivers = db.get_all_drivers()
+    drivers   = db.get_all_drivers()
     all_rides = db.get_all_rides()
-    pending = [r for r in all_rides if r["status"] == "pending"]
-    active = [r for r in all_rides if r["status"] in ("accepted", "in_progress")]
+    pending   = [r for r in all_rides if r["status"] == "pending"]
+    active    = [r for r in all_rides if r["status"] in ("accepted", "in_progress")]
     available_drivers = [d for d in drivers if d["status"] == "available"]
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Drivers", len(drivers))
-    c2.metric("Available", len(available_drivers))
-    c3.metric("Pending Rides", len(pending))
-    c4.metric("Active Rides", len(active))
+    c1.metric("Total Drivers",  len(drivers))
+    c2.metric("Available",      len(available_drivers))
+    c3.metric("Pending Rides",  len(pending))
+    c4.metric("Active Rides",   len(active))
 
     st.divider()
 
+    # ── completed ride report flash ────────────────────────────────────────────
+    if st.session_state.completed_report:
+        rpt = st.session_state.completed_report
+        st.success(
+            f"✅ **Ride Completed!**  \n"
+            f"🚗 Driver **{rpt['driver']}** delivered **{rpt['client']}**  \n"
+            f"📍 {rpt['pickup']} → {rpt['dropoff']}  \n"
+            f"💰 Fare collected: **{rpt['fare']}** · {rpt['distance']} km · {rpt['duration']}  \n"
+            f"🟢 **{rpt['driver']} is now available again.**"
+        )
+        if st.button("Dismiss", key="dismiss_report"):
+            st.session_state.completed_report = None
+            st.rerun()
+        st.divider()
+
     map_col, panel_col = st.columns([3, 2])
 
+    # ── MAP ───────────────────────────────────────────────────────────────────
     with map_col:
         st.markdown("#### 🗺 Live Driver Map")
 
         m = folium.Map(location=NASSAU_CENTER, zoom_start=13, tiles="CartoDB dark_matter")
-        COLOR_MAP = {"available": "green", "busy": "orange", "offline": "gray"}
-        STATUS_EMOJI = {"available": "🟢", "busy": "🟡", "offline": "⚫"}
 
+        # build driver id → location lookup
+        driver_loc: dict[int, tuple[float, float]] = {}
         for d in drivers:
-            lat = float(d["last_lat"]) if d["last_lat"] else (25.048 + (d["id"] * 0.003) % 0.12 - 0.06)
+            lat = float(d["last_lat"])  if d["last_lat"]  else (25.048 + (d["id"] * 0.003) % 0.12 - 0.06)
             lng = float(d["last_lng"]) if d["last_lng"] else (-77.355 + (d["id"] * 0.007) % 0.20 - 0.10)
+            driver_loc[d["id"]] = (lat, lng)
 
+        # draw active ride routes on the map
+        for ride in active:
+            if not (ride.get("pickup_lat") and ride.get("dropoff_lat")):
+                continue
+            p_lat, p_lng = float(ride["pickup_lat"]),  float(ride["pickup_lng"])
+            d_lat, d_lng = float(ride["dropoff_lat"]), float(ride["dropoff_lng"])
+
+            # dashed route line
+            folium.PolyLine(
+                [[p_lat, p_lng], [d_lat, d_lng]],
+                color="#00C2D4", weight=3, opacity=0.7,
+                dash_array="8 6",
+                tooltip=f"{ride['pickup_location']} → {ride['dropoff_location']}",
+            ).add_to(m)
+
+            # pickup marker (green flag)
+            folium.Marker(
+                location=[p_lat, p_lng],
+                icon=folium.DivIcon(html=(
+                    '<div style="font-size:18px;line-height:1">📍</div>'
+                ), icon_size=(22, 22), icon_anchor=(11, 22)),
+                tooltip=f"Pickup: {ride['pickup_location']}",
+            ).add_to(m)
+
+            # dropoff marker (checkered flag)
+            folium.Marker(
+                location=[d_lat, d_lng],
+                icon=folium.DivIcon(html=(
+                    '<div style="font-size:18px;line-height:1">🏁</div>'
+                ), icon_size=(22, 22), icon_anchor=(11, 22)),
+                tooltip=f"Dropoff: {ride['dropoff_location']}",
+            ).add_to(m)
+
+            # line from driver's current position to pickup (if in_progress → to dropoff)
+            if ride["driver_id"] and ride["driver_id"] in driver_loc:
+                drv_lat, drv_lng = driver_loc[ride["driver_id"]]
+                target = (d_lat, d_lng) if ride["status"] == "in_progress" else (p_lat, p_lng)
+                folium.PolyLine(
+                    [[drv_lat, drv_lng], list(target)],
+                    color="#FFC72C", weight=2, opacity=0.6,
+                    dash_array="4 4",
+                ).add_to(m)
+
+        # driver markers
+        for d in drivers:
+            lat, lng = driver_loc[d["id"]]
             updated = ""
             if d["last_location_updated_at"]:
                 updated = f"<br><small>Updated: {d['last_location_updated_at'].strftime('%H:%M:%S')}</small>"
-
-            popup_html = f"""
-            <b>{d['name']}</b><br>
-            {d['vehicle_plate']} · {d['vehicle_color']} {d['vehicle_make']}<br>
-            <b>{STATUS_EMOJI.get(d['status'], '')} {d['status'].capitalize()}</b>
-            {updated}
-            """
+            popup_html = (
+                f"<b>{d['name']}</b><br>"
+                f"{d['vehicle_plate']} · {d['vehicle_color']} {d['vehicle_make']}<br>"
+                f"<b>{STATUS_EMOJI.get(d['status'], '')} {d['status'].capitalize()}</b>"
+                f"{updated}"
+            )
             folium.CircleMarker(
                 location=[lat, lng],
                 radius=10 if d["status"] == "available" else 8,
@@ -1361,7 +1429,7 @@ def page_office_dashboard():
                 tooltip=folium.Tooltip(popup_html, sticky=True),
             ).add_to(m)
 
-        st_folium(m, height=440, use_container_width=True)
+        st_folium(m, height=460, use_container_width=True)
 
         st.markdown("#### 🚗 Fleet")
         if not drivers:
@@ -1370,10 +1438,12 @@ def page_office_dashboard():
             for d in drivers:
                 e = STATUS_EMOJI.get(d["status"], "⚫")
                 st.markdown(
-                    f"{e} **{d['name']}** — {d['vehicle_plate']} · {d['vehicle_make']} {d['vehicle_model']} "
+                    f"{e} **{d['name']}** — {d['vehicle_plate']} · "
+                    f"{d['vehicle_make']} {d['vehicle_model']} "
                     f"· ⭐ {float(d['rating']):.1f} · {d['total_rides']} rides"
                 )
 
+    # ── PANEL ─────────────────────────────────────────────────────────────────
     with panel_col:
         st.markdown("#### ⏳ Pending Bookings")
 
@@ -1382,7 +1452,7 @@ def page_office_dashboard():
         else:
             for ride in pending:
                 with st.container(border=True):
-                    created = ride["created_at"]
+                    created  = ride["created_at"]
                     time_str = created.strftime("%H:%M") if isinstance(created, datetime) else ""
                     st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km · {time_str}")
                     st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
@@ -1393,7 +1463,7 @@ def page_office_dashboard():
                         driver_options = {f"{d['name']} — {d['vehicle_plate']}": d["id"] for d in available_drivers}
                         chosen_label = st.selectbox(
                             "Assign driver", list(driver_options.keys()), key=f"sel_{ride['id']}")
-                        if st.button(f"Dispatch →", key=f"dispatch_{ride['id']}", type="primary",
+                        if st.button("Dispatch →", key=f"dispatch_{ride['id']}", type="primary",
                                      use_container_width=True):
                             chosen_id = driver_options[chosen_label]
                             db.update_ride_status(ride["id"], "accepted", chosen_id)
@@ -1408,12 +1478,49 @@ def page_office_dashboard():
         else:
             for ride in active:
                 with st.container(border=True):
-                    badge = "🚀 IN PROGRESS" if ride["status"] == "in_progress" else "🚗 ACCEPTED"
-                    st.markdown(f"{badge} · {db.fmt_usd(ride['estimated_fare'])}")
-                    st.caption(f"👤 {ride['client_name']}")
-                    st.caption(f"📍 {ride['pickup_location']} → {ride['dropoff_location']}")
+                    if ride["status"] == "in_progress":
+                        st.markdown("🚀 **IN PROGRESS**")
+                    else:
+                        st.markdown("🚗 **ACCEPTED — awaiting start**")
+
+                    st.markdown(
+                        f"**{db.fmt_usd(ride['estimated_fare'])}** · "
+                        f"{ride['distance_km']:.1f} km"
+                    )
+                    st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
+                    st.caption(f"📍 {ride['pickup_location']}")
+                    st.caption(f"🏁 {ride['dropoff_location']}")
                     if ride["driver_name"]:
                         st.caption(f"🚗 {ride['driver_name']} · {ride['driver_plate']}")
+
+                    # admin can advance: accepted → in_progress, or in_progress → completed
+                    if ride["status"] == "accepted":
+                        if st.button("▶ Mark In Progress", key=f"start_{ride['id']}",
+                                     use_container_width=True):
+                            db.update_ride_status(ride["id"], "in_progress")
+                            st.rerun()
+
+                    elif ride["status"] == "in_progress":
+                        if st.button("✅ Complete Ride", key=f"complete_{ride['id']}",
+                                     type="primary", use_container_width=True):
+                            # duration
+                            started = ride.get("started_at")
+                            if started:
+                                mins = int((datetime.utcnow() - started).total_seconds() // 60)
+                                dur  = f"{mins} min"
+                            else:
+                                dur = "—"
+                            completed_ride = db.update_ride_status(ride["id"], "completed")
+                            st.session_state.completed_report = {
+                                "driver":   ride["driver_name"] or "Driver",
+                                "client":   ride["client_name"],
+                                "pickup":   ride["pickup_location"],
+                                "dropoff":  ride["dropoff_location"],
+                                "fare":     db.fmt_usd(ride["estimated_fare"]),
+                                "distance": f"{ride['distance_km']:.1f}",
+                                "duration": dur,
+                            }
+                            st.rerun()
 
     time.sleep(6)
     st.rerun()
