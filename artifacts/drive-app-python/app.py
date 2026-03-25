@@ -1790,63 +1790,346 @@ def _admin_drivers(drivers, all_rides):
 
 
 # ── Section: Rides ─────────────────────────────────────────────────────────────
+def _ride_detail(ride, key_prefix):
+    """Full expandable detail panel for a single ride."""
+    rid = ride["id"]
+
+    # ── Timeline ──────────────────────────────────────────────────────────────
+    st.markdown("**📋 Ride Timeline**")
+
+    def _tstep(icon, label, ts, extra=""):
+        if ts:
+            t = ts.strftime("%b %d · %H:%M:%S") if hasattr(ts, "strftime") else str(ts)
+            st.markdown(f"{icon} **{label}** &nbsp; `{t}` {extra}")
+        else:
+            st.markdown(f"<span style='color:#555'>{icon} {label} — not yet</span>",
+                        unsafe_allow_html=True)
+
+    _tstep("🕐", "Requested",  ride.get("created_at"))
+    driver_name = ride.get("driver_name") or "—"
+    _tstep("🚗", "Accepted",   ride.get("accepted_at"), f"· Driver: **{driver_name}**")
+    _tstep("🚀", "Trip Started", ride.get("started_at"))
+    _tstep("✅", "Completed",  ride.get("completed_at"),
+           f"· Fare: **{db.fmt_usd(ride.get('final_fare') or ride.get('estimated_fare') or 0)}**")
+    if ride["status"] == "cancelled":
+        reason = ride.get("cancellation_reason") or "—"
+        st.markdown(f"❌ **Cancelled** · Reason: _{reason}_")
+    if ride.get("scheduled_at"):
+        st.markdown(f"📅 **Scheduled for** `{ride['scheduled_at'].strftime('%b %d · %I:%M %p')}`")
+
+    st.divider()
+
+    detail_l, detail_r = st.columns(2)
+
+    # ── Map ───────────────────────────────────────────────────────────────────
+    with detail_l:
+        st.markdown("**🗺 Route Map**")
+        if ride.get("pickup_lat") and ride.get("dropoff_lat"):
+            p_lat, p_lng = float(ride["pickup_lat"]), float(ride["pickup_lng"])
+            d_lat, d_lng = float(ride["dropoff_lat"]), float(ride["dropoff_lng"])
+            mid_lat = (p_lat + d_lat) / 2
+            mid_lng = (p_lng + d_lng) / 2
+            mini = folium.Map(location=[mid_lat, mid_lng], zoom_start=12,
+                              tiles="CartoDB dark_matter")
+            folium.PolyLine([[p_lat, p_lng], [d_lat, d_lng]],
+                            color="#00C2D4", weight=3, opacity=0.9).add_to(mini)
+            folium.Marker([p_lat, p_lng],
+                          icon=folium.DivIcon(
+                              html='<div style="font-size:20px">📍</div>',
+                              icon_size=(24, 24), icon_anchor=(12, 24)),
+                          tooltip=f"Pickup: {ride['pickup_location']}").add_to(mini)
+            folium.Marker([d_lat, d_lng],
+                          icon=folium.DivIcon(
+                              html='<div style="font-size:20px">🏁</div>',
+                              icon_size=(24, 24), icon_anchor=(12, 24)),
+                          tooltip=f"Dropoff: {ride['dropoff_location']}").add_to(mini)
+            st_folium(mini, height=220, use_container_width=True,
+                      key=f"mini_map_{key_prefix}_{rid}")
+        else:
+            st.caption("No GPS coordinates recorded for this ride.")
+
+    # ── Payment summary ───────────────────────────────────────────────────────
+    with detail_r:
+        st.markdown("**💳 Payment Summary**")
+        bill = db.get_ride_bill(rid)
+        payment = db.get_ride_payment(rid)
+        estimated = float(ride.get("estimated_fare") or 0)
+        final     = float(ride.get("final_fare") or estimated)
+
+        if bill:
+            st.markdown(
+                f"Base fare: **{db.fmt_usd(bill['base_fare'])}**  \n"
+                f"Distance fare: **{db.fmt_usd(bill['distance_fare'])}**  \n"
+                f"—  \n"
+                f"**Total: {db.fmt_usd(bill['total_fare'])}**  \n"
+                f"Distance: {bill['distance_km']:.2f} km  \n"
+                f"Currency: {bill['currency']}  \n"
+                f"Bill status: `{bill['status'].upper()}`"
+            )
+        else:
+            st.markdown(
+                f"Estimated fare: **{db.fmt_usd(estimated)}**  \n"
+                f"Final fare: **{db.fmt_usd(final)}**  \n"
+                f"Distance: {float(ride.get('distance_km') or 0):.2f} km  \n"
+                f"_(No bill generated yet)_"
+            )
+
+        if payment:
+            pm = payment.get("payment_method") or "Cash"
+            ps = payment.get("status") or "—"
+            amt = float(payment.get("amount") or 0)
+            st.markdown(
+                f"Payment method: **{pm.upper()}**  \n"
+                f"Amount charged: **{db.fmt_usd(amt)}** {payment.get('currency','BSD')}  \n"
+                f"Payment status: `{ps.upper()}`"
+            )
+        else:
+            st.markdown("Payment method: **Cash** _(default)_  \nNo payment record on file.")
+
+    st.divider()
+
+    # ── Safety events ─────────────────────────────────────────────────────────
+    safety_evts = db.get_ride_safety_events(rid)
+    if safety_evts:
+        st.markdown("**🚨 Safety Events**")
+        sev_color = {"low": "🟡", "medium": "🟠", "high": "🔴", "critical": "💀"}
+        for evt in safety_evts:
+            ts = evt["timestamp"].strftime("%b %d %H:%M") if evt.get("timestamp") else ""
+            st.warning(
+                f"{sev_color.get(evt.get('severity','low'),'')} "
+                f"**{evt.get('event_type','').replace('_',' ').title()}** — "
+                f"{evt.get('severity','').upper()} severity  \n"
+                f"{evt.get('description','')}  \n"
+                f"`{ts}`"
+                + (f"  \n_Resolved: {evt['resolved_at'].strftime('%b %d %H:%M')}_"
+                   if evt.get("resolved_at") else "  \n⚠️ _Unresolved_")
+            )
+        st.divider()
+
+    # ── Admin actions ─────────────────────────────────────────────────────────
+    st.markdown("**🔧 Admin Actions**")
+    act1, act2, act3 = st.columns(3)
+
+    with act1:
+        is_susp = bool(ride.get("is_suspicious"))
+        susp_label = "🔴 Marked Suspicious" if is_susp else "Mark Suspicious"
+        if st.button(susp_label, key=f"{key_prefix}_susp_{rid}", use_container_width=True,
+                     type="primary" if is_susp else "secondary"):
+            db.update_ride_admin_flags(rid, is_suspicious=not is_susp)
+            st.rerun()
+
+    with act2:
+        is_ref = bool(ride.get("is_flagged_refund"))
+        ref_label = "💰 Refund Flagged" if is_ref else "Flag for Refund"
+        if st.button(ref_label, key=f"{key_prefix}_refund_{rid}", use_container_width=True,
+                     type="primary" if is_ref else "secondary"):
+            db.update_ride_admin_flags(rid, is_flagged_refund=not is_ref)
+            st.rerun()
+
+    with act3:
+        if st.button("🚨 Log Safety Event", key=f"{key_prefix}_sos_{rid}",
+                     use_container_width=True):
+            st.session_state[f"show_sos_{rid}"] = True
+
+    if st.session_state.get(f"show_sos_{rid}"):
+        with st.form(f"sos_form_{key_prefix}_{rid}"):
+            sos_type = st.selectbox("Event Type",
+                ["user_report", "route_deviation", "speed_violation", "unauthorized_stop", "sos"])
+            sos_sev  = st.selectbox("Severity", ["low", "medium", "high", "critical"])
+            sos_desc = st.text_area("Description")
+            if st.form_submit_button("Submit Event"):
+                db.add_safety_event(rid, sos_type, sos_sev, sos_desc)
+                st.session_state.pop(f"show_sos_{rid}", None)
+                st.success("Safety event logged.")
+                st.rerun()
+
+    # ── Admin note ────────────────────────────────────────────────────────────
+    st.markdown("**💬 Admin Note**")
+    existing_note = ride.get("admin_note") or ""
+    with st.form(f"note_form_{key_prefix}_{rid}"):
+        new_note = st.text_area("Attach incident note or observation",
+                                value=existing_note, height=80,
+                                key=f"note_ta_{key_prefix}_{rid}")
+        sub1, sub2 = st.columns([2, 1])
+        if sub1.form_submit_button("💾 Save Note", use_container_width=True):
+            db.update_ride_admin_flags(rid, admin_note=new_note)
+            st.success("Note saved.")
+            st.rerun()
+        if sub2.form_submit_button("🗑 Clear Note", use_container_width=True):
+            db.update_ride_admin_flags(rid, admin_note="")
+            st.rerun()
+
+    if ride["status"] == "cancelled":
+        st.markdown("**📝 Cancellation Reason**")
+        existing_cr = ride.get("cancellation_reason") or ""
+        with st.form(f"cr_form_{key_prefix}_{rid}"):
+            new_cr = st.text_input("Cancellation reason", value=existing_cr)
+            if st.form_submit_button("Save Reason"):
+                db.update_ride_admin_flags(rid, cancellation_reason=new_cr)
+                st.rerun()
+
+    # ── State control ─────────────────────────────────────────────────────────
+    st.markdown("**⚙️ State Control**")
+    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns(4)
+    with ctrl1:
+        if ride["status"] in ("pending", "scheduled", "accepted"):
+            if st.button("❌ Cancel Ride", key=f"{key_prefix}_ctrl_cancel_{rid}",
+                         use_container_width=True):
+                db.update_ride_status(rid, "cancelled")
+                st.rerun()
+    with ctrl2:
+        if ride["status"] == "accepted":
+            if st.button("▶ Start Trip", key=f"{key_prefix}_ctrl_start_{rid}",
+                         use_container_width=True):
+                db.update_ride_status(rid, "in_progress")
+                st.rerun()
+    with ctrl3:
+        if ride["status"] == "in_progress":
+            if st.button("✅ Complete", key=f"{key_prefix}_ctrl_comp_{rid}",
+                         type="primary", use_container_width=True):
+                db.update_ride_status(rid, "completed")
+                st.rerun()
+
+    with ctrl4:
+        # Export
+        fare = float(ride.get("estimated_fare") or 0)
+        export_text = (
+            f"GoRide Ride Record — Export\n"
+            f"{'='*40}\n"
+            f"Ride ID:     #{rid}\n"
+            f"Status:      {ride['status'].upper()}\n"
+            f"Rider:       {ride['client_name']} ({ride['client_phone']})\n"
+            f"Driver:      {ride.get('driver_name') or '—'} ({ride.get('driver_plate') or '—'})\n"
+            f"Pickup:      {ride['pickup_location']}\n"
+            f"Dropoff:     {ride['dropoff_location']}\n"
+            f"Distance:    {float(ride.get('distance_km') or 0):.2f} km\n"
+            f"Fare:        {db.fmt_usd(fare)}\n"
+            f"Requested:   {ride['created_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('created_at') else '—'}\n"
+            f"Accepted:    {ride['accepted_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('accepted_at') else '—'}\n"
+            f"Started:     {ride['started_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('started_at') else '—'}\n"
+            f"Completed:   {ride['completed_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('completed_at') else '—'}\n"
+            f"Notes:       {ride.get('notes') or '—'}\n"
+            f"Admin Note:  {ride.get('admin_note') or '—'}\n"
+            f"Suspicious:  {'YES' if ride.get('is_suspicious') else 'No'}\n"
+            f"Refund Flag: {'YES' if ride.get('is_flagged_refund') else 'No'}\n"
+        )
+        st.download_button(
+            "⬇️ Export Record",
+            data=export_text,
+            file_name=f"goride_ride_{rid}.txt",
+            mime="text/plain",
+            key=f"{key_prefix}_export_{rid}",
+            use_container_width=True,
+        )
+
+
 def _admin_rides(all_rides, drivers):
     st.markdown("## 🚖 Rides")
 
     driver_map = {d["id"]: d["name"] for d in drivers}
 
+    # ── Search bar ────────────────────────────────────────────────────────────
+    search = st.text_input(
+        "🔍 Search by ride ID, rider name, phone, driver, pickup, or destination",
+        key="rides_search", placeholder="e.g. #12  or  John  or  Airport")
+
+    if search:
+        q = search.lower().lstrip("#")
+        all_rides = [
+            r for r in all_rides
+            if q in str(r["id"])
+            or q in (r.get("client_name") or "").lower()
+            or q in (r.get("client_phone") or "").lower()
+            or q in (driver_map.get(r.get("driver_id"), "")).lower()
+            or q in (r.get("pickup_location") or "").lower()
+            or q in (r.get("dropoff_location") or "").lower()
+        ]
+        st.caption(f'{len(all_rides)} result(s) for \"{search}\"')
+
+    # ── Status tabs ───────────────────────────────────────────────────────────
     tab_all, tab_pending, tab_sched, tab_active, tab_done, tab_cancelled = st.tabs([
-        "All", "⏳ Pending", "📅 Scheduled", "🚀 Active", "✅ Completed", "❌ Cancelled"
+        f"All ({len(all_rides)})",
+        f"⏳ Pending ({sum(1 for r in all_rides if r['status']=='pending')})",
+        f"📅 Scheduled ({sum(1 for r in all_rides if r['status']=='scheduled')})",
+        f"🚀 Active ({sum(1 for r in all_rides if r['status'] in ('accepted','in_progress'))})",
+        f"✅ Completed ({sum(1 for r in all_rides if r['status']=='completed')})",
+        f"❌ Cancelled ({sum(1 for r in all_rides if r['status']=='cancelled')})",
     ])
 
-    def _rides_table(rides, key_prefix):
+    STATUS_BADGE = {
+        "pending":     "⏳ Pending",
+        "scheduled":   "📅 Scheduled",
+        "accepted":    "🚗 Accepted",
+        "in_progress": "🚀 In Progress",
+        "completed":   "✅ Completed",
+        "cancelled":   "❌ Cancelled",
+    }
+
+    def _rides_list(rides, key_prefix):
         if not rides:
             st.caption("No rides in this category.")
             return
+
         for ride in rides:
+            rid = ride["id"]
+            is_susp  = bool(ride.get("is_suspicious"))
+            is_ref   = bool(ride.get("is_flagged_refund"))
+            has_note = bool(ride.get("admin_note"))
+
+            # Alert badges
+            alert_str = ""
+            if is_susp:  alert_str += " 🔴"
+            if is_ref:   alert_str += " 💰"
+            if has_note: alert_str += " 💬"
+
+            drv     = driver_map.get(ride.get("driver_id"), "—")
+            req_ts  = ride["created_at"].strftime("%b %d %H:%M") if ride.get("created_at") else "—"
+            comp_ts = ride["completed_at"].strftime("%b %d %H:%M") if ride.get("completed_at") else "—"
+            fare    = db.fmt_usd(ride.get("estimated_fare") or 0)
+            pay_method = "Cash"
+
             with st.container(border=True):
-                ts = ride["created_at"].strftime("%b %d %H:%M") if ride.get("created_at") else ""
-                sched_str = ""
-                if ride.get("scheduled_at"):
-                    sched_str = f" · 📅 {ride['scheduled_at'].strftime('%b %d %I:%M %p')}"
-                drv = driver_map.get(ride.get("driver_id"), "—")
-                row_l, row_r = st.columns([4, 1])
-                row_l.markdown(
-                    f"**#{ride['id']}** — {ride['client_name']} · {ride['client_phone']}  \n"
-                    f"📍 {ride['pickup_location']} → 🏁 {ride['dropoff_location']}  \n"
-                    f"🚗 {drv} · **{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km"
-                    f"{sched_str}  \n"
-                    f"`{ride['status'].upper()}` · Created {ts}"
+                # ── Header row: ID + badges + status
+                h_l, h_r = st.columns([5, 1])
+                h_l.markdown(
+                    f"**#{rid}** &nbsp;·&nbsp; {ride['client_name']} &nbsp;·&nbsp; "
+                    f"🚗 {drv} &nbsp;·&nbsp; "
+                    f"`{STATUS_BADGE.get(ride['status'], ride['status'])}`{alert_str}"
                 )
-                with row_r:
-                    if ride["status"] in ("pending", "scheduled", "accepted"):
-                        if st.button("❌ Cancel", key=f"{key_prefix}_canc_{ride['id']}",
-                                     use_container_width=True):
-                            db.update_ride_status(ride["id"], "cancelled")
-                            st.rerun()
-                    if ride["status"] == "accepted":
-                        if st.button("▶ Start", key=f"{key_prefix}_start_{ride['id']}",
-                                     use_container_width=True):
-                            db.update_ride_status(ride["id"], "in_progress")
-                            st.rerun()
-                    if ride["status"] == "in_progress":
-                        if st.button("✅ Complete", key=f"{key_prefix}_comp_{ride['id']}",
-                                     type="primary", use_container_width=True):
-                            db.update_ride_status(ride["id"], "completed")
-                            st.rerun()
+                h_r.caption(req_ts)
+
+                # ── Route + fare row
+                st.markdown(
+                    f"📍 **{ride['pickup_location']}** &nbsp;→&nbsp; "
+                    f"🏁 **{ride['dropoff_location']}**  \n"
+                    f"💵 {fare} &nbsp;·&nbsp; 💳 {pay_method} &nbsp;·&nbsp; "
+                    f"{float(ride.get('distance_km') or 0):.1f} km"
+                    + (f" &nbsp;·&nbsp; ✅ {comp_ts}" if ride["status"] == "completed" else "")
+                    + (f" &nbsp;·&nbsp; 📞 {ride.get('client_phone','')}" if ride.get("client_phone") else "")
+                )
+
+                if is_susp or is_ref or has_note:
+                    flags = []
+                    if is_susp: flags.append("🔴 Suspicious")
+                    if is_ref:  flags.append("💰 Refund Flagged")
+                    if has_note: flags.append(f'💬 "{ride["admin_note"][:60]}…"' if len(ride.get("admin_note","")) > 60 else f'💬 "{ride.get("admin_note","")}"')
+                    st.caption("  ·  ".join(flags))
+
+                with st.expander(f"🔍 View Details — Ride #{rid}"):
+                    _ride_detail(ride, key_prefix)
 
     with tab_all:
-        _rides_table(all_rides, "ra")
+        _rides_list(all_rides, "ra")
     with tab_pending:
-        _rides_table([r for r in all_rides if r["status"] == "pending"], "rp")
+        _rides_list([r for r in all_rides if r["status"] == "pending"], "rp")
     with tab_sched:
-        _rides_table([r for r in all_rides if r["status"] == "scheduled"], "rs")
+        _rides_list([r for r in all_rides if r["status"] == "scheduled"], "rs")
     with tab_active:
-        _rides_table([r for r in all_rides if r["status"] in ("accepted", "in_progress")], "rv")
+        _rides_list([r for r in all_rides if r["status"] in ("accepted", "in_progress")], "rv")
     with tab_done:
-        _rides_table([r for r in all_rides if r["status"] == "completed"], "rc")
+        _rides_list([r for r in all_rides if r["status"] == "completed"], "rc")
     with tab_cancelled:
-        _rides_table([r for r in all_rides if r["status"] == "cancelled"], "rx")
+        _rides_list([r for r in all_rides if r["status"] == "cancelled"], "rx")
 
 
 # ── Section: Safety / Incidents ────────────────────────────────────────────────

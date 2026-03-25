@@ -359,3 +359,64 @@ def get_driver_rides(driver_id: int):
                 SELECT * FROM rides WHERE driver_id=%s ORDER BY id DESC LIMIT 50
             """, (driver_id,))
             return cur.fetchall()
+
+
+def get_ride_payment(ride_id: int):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM payments WHERE ride_id=%s ORDER BY created_at DESC LIMIT 1",
+                (ride_id,))
+            return cur.fetchone()
+
+
+def get_ride_bill(ride_id: int):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM bills WHERE ride_id=%s LIMIT 1",
+                (ride_id,))
+            return cur.fetchone()
+
+
+def get_ride_safety_events(ride_id: int):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM safety_events WHERE ride_id=%s ORDER BY timestamp DESC",
+                (ride_id,))
+            return cur.fetchall()
+
+
+def update_ride_admin_flags(ride_id: int, admin_note=None, is_suspicious=None,
+                             is_flagged_refund=None, fare_adjusted=None,
+                             cancellation_reason=None):
+    sets, vals = [], []
+    if admin_note is not None:
+        sets.append("admin_note=%s"); vals.append(admin_note)
+    if is_suspicious is not None:
+        sets.append("is_suspicious=%s"); vals.append(is_suspicious)
+    if is_flagged_refund is not None:
+        sets.append("is_flagged_refund=%s"); vals.append(is_flagged_refund)
+    if fare_adjusted is not None:
+        sets.append("fare_adjusted=%s"); vals.append(fare_adjusted)
+    if cancellation_reason is not None:
+        sets.append("cancellation_reason=%s"); vals.append(cancellation_reason)
+    if not sets:
+        return
+    vals.append(ride_id)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE rides SET {', '.join(sets)} WHERE id=%s",
+                vals)
+
+
+def add_safety_event(ride_id: int, event_type: str, severity: str, description: str):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                INSERT INTO safety_events (ride_id, event_type, severity, description)
+                VALUES (%s, %s, %s, %s) RETURNING *
+            """, (ride_id, event_type, severity, description))
+            return cur.fetchone()
