@@ -331,5 +331,31 @@ def update_ride_status(ride_id: int, status: str, driver_id: int = None):
                 cur.execute("""
                     UPDATE rides SET status=%s WHERE id=%s RETURNING *
                 """, (status, ride_id))
-                return cur.fetchone()
+                ride = cur.fetchone()
+                if ride and ride.get("driver_id"):
+                    cur.execute(
+                        "UPDATE drivers SET status='available' WHERE id=%s",
+                        (ride["driver_id"],))
+                return ride
             return None
+
+
+def get_bills(limit: int = 200):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT b.*, r.pickup_location, r.dropoff_location
+                FROM bills b
+                LEFT JOIN rides r ON b.ride_id = r.id
+                ORDER BY b.id DESC LIMIT %s
+            """, (limit,))
+            return cur.fetchall()
+
+
+def get_driver_rides(driver_id: int):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM rides WHERE driver_id=%s ORDER BY id DESC LIMIT 50
+            """, (driver_id,))
+            return cur.fetchall()

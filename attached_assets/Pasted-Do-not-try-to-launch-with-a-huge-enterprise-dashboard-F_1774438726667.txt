@@ -1,0 +1,138 @@
+Do not try to launch with a huge enterprise dashboard.
+For V1, the admin panel should help you do 5 things well:
+watch rides live
+manage drivers
+handle safety issues
+monitor payments/basic business numbers
+test the whole system easily
+Best V1 admin dashboard structure
+Use 6 main sections only:
+Overview
+Live Operations
+Drivers
+Rides
+Safety / Incidents
+Settings / Test Tools
+That is enough for release and pilot testing.
+1. Overview page
+This should be the first page admin sees.
+What it should show
+Top summary cards:
+Active rides now
+Online drivers
+Pending ride requests
+Completed rides today
+Cancelled rides today
+SOS / incident alerts open
+Pending driver approvals
+Revenue today
+Small charts
+Keep only 2–3 charts:
+rides by hour today
+completed vs cancelled rides
+revenue today
+Why this matters
+This gives you instant awareness without opening different pages.
+For testing
+Add a small section:
+latest 10 system events
+latest 10 failed actions
+latest GPS updates
+latest payment failures
+That helps during debugging.
+2. Live Operations page
+This is the true heart of the V1 dashboard.
+What it should have
+A. Live map
+Show:
+online drivers
+busy drivers
+rider pickup requests
+active trips
+B. Live ride table
+Columns:
+Ride ID
+Rider
+Driver
+Status
+Pickup
+Destination
+ETA
+Payment type
+Flag status
+Created time
+C. Quick filters
+waiting for driver
+accepted
+driver arrived
+trip started
+completed
+cancelled
+flagged
+D. Quick actions
+view ride
+contact driver
+contact rider
+cancel ride
+reassign driver
+mark for review
+Why this matters
+If something goes wrong, operations can act immediately.
+For testing
+You need to confirm:
+rides appear in real time
+statuses change correctly
+map markers update correctly
+admin actions work
+3. Drivers page
+This is where your launch lives or dies.
+Bad driver management will destroy rider trust.
+What it should have
+A. Driver list
+Columns:
+Driver name
+Photo
+Vehicle
+Plate number
+Status (online/offline/on trip/suspended)
+Verification status
+Rating
+Trust score
+Docs status
+Last active
+B. Filters
+pending approval
+approved
+suspended
+docs expiring
+online
+offline
+low trust score
+C. Driver profile page
+When clicked, show:
+personal info
+vehicle info
+uploaded documents
+ratings
+ride count
+cancellations
+complaints
+flags
+wallet/earnings summary
+D. Admin actions
+approve
+reject
+suspend
+reactivate
+request document re-upload
+add internal note
+For first release
+Keep verification manual.
+Do not over-automate it yet.
+For testing
+You need to test:
+driver signup
+document upload
+approval flow
+driver goes online after approval only
+suspension blocks ride access
