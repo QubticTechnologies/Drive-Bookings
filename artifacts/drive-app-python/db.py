@@ -412,6 +412,58 @@ def update_ride_admin_flags(ride_id: int, admin_note=None, is_suspicious=None,
                 vals)
 
 
+def find_or_create_test_driver():
+    """Get the persistent test driver, creating one if it doesn't exist."""
+    TEST_PHONE = "+12420000001"
+    existing = find_driver_by_phone(TEST_PHONE)
+    if existing:
+        return existing
+    return register_driver(
+        name="[TEST] Alex Driver",
+        phone=TEST_PHONE,
+        email="testdriver@goride.bs",
+        license_number="BS-TEST-001",
+        vehicle_make="Toyota", vehicle_model="Camry",
+        vehicle_year=2022,
+        vehicle_plate="TEST-001",
+        vehicle_color="White",
+    )
+
+
+def resolve_safety_event(event_id: str, resolution_notes: str):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                UPDATE safety_events
+                SET resolved_at=%s, resolution_notes=%s
+                WHERE id=%s RETURNING *
+            """, (datetime.utcnow(), resolution_notes, event_id))
+            return cur.fetchone()
+
+
+def get_safety_events(limit: int = 50):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM safety_events ORDER BY timestamp DESC LIMIT %s
+            """, (limit,))
+            return cur.fetchall()
+
+
+def delete_test_data():
+    """Remove all [TEST] labelled rides, drivers, bills and safety events."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM rides WHERE client_name LIKE '%[TEST]%' OR notes LIKE '%[TEST]%'")
+            test_ride_ids = [r[0] for r in cur.fetchall()]
+            if test_ride_ids:
+                cur.execute("DELETE FROM safety_events WHERE ride_id = ANY(%s)", (test_ride_ids,))
+                cur.execute("DELETE FROM bills WHERE ride_id = ANY(%s)", (test_ride_ids,))
+                cur.execute("DELETE FROM payments WHERE ride_id = ANY(%s)", (test_ride_ids,))
+                cur.execute("DELETE FROM rides WHERE id = ANY(%s)", (test_ride_ids,))
+            cur.execute("DELETE FROM drivers WHERE phone='+12420000001'")
+
+
 def add_safety_event(ride_id: int, event_type: str, severity: str, description: str):
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:

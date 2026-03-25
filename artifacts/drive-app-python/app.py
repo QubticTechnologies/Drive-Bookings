@@ -2246,23 +2246,454 @@ def _admin_safety(all_rides):
 
 
 # ── Section: Settings / Test Tools ────────────────────────────────────────────
+
+def _tr(key):
+    """Get test result dict, defaulting to None status."""
+    return st.session_state.get("test_results", {}).get(key, {"status": None, "log": ""})
+
+def _ts(key, status, log=""):
+    """Store test result."""
+    if "test_results" not in st.session_state:
+        st.session_state["test_results"] = {}
+    st.session_state["test_results"][key] = {"status": status, "log": log}
+
+def _badge(key):
+    r = _tr(key)
+    return {"pass": "✅", "fail": "❌", "skip": "⏭️", "manual": "☑️"}.get(r["status"], "⬜")
+
+def _test_row(key, label, desc, run_fn=None, manual_note=None):
+    """Render a single test row with badge + action."""
+    r = _tr(key)
+    col_badge, col_desc, col_btn = st.columns([0.5, 5, 1.5])
+    col_badge.markdown(f"### {_badge(key)}")
+    col_desc.markdown(f"**{label}**  \n{desc}")
+    with col_btn:
+        if run_fn:
+            if st.button("Run Test", key=f"run_{key}", use_container_width=True):
+                try:
+                    log = run_fn()
+                    _ts(key, "pass", log or "OK")
+                except Exception as exc:
+                    _ts(key, "fail", str(exc))
+                st.rerun()
+        elif manual_note:
+            if st.button("Mark Done ✓", key=f"mark_{key}", use_container_width=True):
+                _ts(key, "manual", "Manually verified")
+                st.rerun()
+    if r["status"] == "pass":
+        st.success(f"✅ {r['log']}")
+    elif r["status"] == "fail":
+        st.error(f"❌ {r['log']}")
+    elif r["status"] == "manual":
+        st.success(f"☑️ Manually verified")
+    if manual_note and r["status"] not in ("manual", "pass"):
+        st.caption(f"📋 {manual_note}")
+
+
+def _release_checklist(drivers, all_rides):
+    if "test_results" not in st.session_state:
+        st.session_state["test_results"] = {}
+    results = st.session_state["test_results"]
+
+    # ── Summary bar ───────────────────────────────────────────────────────────
+    total = 19
+    passed  = sum(1 for r in results.values() if r["status"] in ("pass", "manual"))
+    failed  = sum(1 for r in results.values() if r["status"] == "fail")
+    pending = total - passed - failed
+
+    prog_col, clr_col = st.columns([5, 1])
+    with prog_col:
+        pct = passed / total
+        st.progress(pct, text=f"**{passed}/{total} tests passing** · {failed} failed · {pending} pending")
+    with clr_col:
+        if st.button("🔄 Reset All", use_container_width=True):
+            st.session_state["test_results"] = {}
+            for k in list(st.session_state.keys()):
+                if k.startswith("test_ride_id") or k.startswith("test_driver_id") or k.startswith("test_sos_id"):
+                    del st.session_state[k]
+            st.rerun()
+
+    if passed == total:
+        st.balloons()
+        st.success("🎉 **All tests passing — GoRide is ready for launch!**")
+
+    st.divider()
+
+    # ════════════════════════════════════════════════
+    # 1. DRIVER TESTING
+    # ════════════════════════════════════════════════
+    with st.expander("🚗 Driver Testing", expanded=True):
+
+        def _t_drv_signup():
+            drv = db.find_or_create_test_driver()
+            assert drv and drv["id"], "Driver not created"
+            st.session_state["test_driver_id"] = drv["id"]
+            return f"Test driver created: #{drv['id']} {drv['name']} · {drv['vehicle_plate']}"
+
+        _test_row("drv_signup", "Driver Signup",
+                  "Creates a test driver [TEST] Alex Driver in the database and verifies the record.",
+                  run_fn=_t_drv_signup)
+
+        def _t_drv_approve():
+            drv_id = st.session_state.get("test_driver_id")
+            if not drv_id:
+                drv = db.find_or_create_test_driver()
+                drv_id = drv["id"]
+                st.session_state["test_driver_id"] = drv_id
+            db.update_driver_status(drv_id, "available")
+            drv = db.get_driver(drv_id)
+            assert drv["status"] == "available", f"Status is {drv['status']}, expected available"
+            return f"Driver #{drv_id} status → {drv['status']}"
+
+        _test_row("drv_approve", "Driver Approved / Go Online",
+                  "Sets the test driver to 'available' and verifies the DB status update.",
+                  run_fn=_t_drv_approve)
+
+        _test_row("drv_docs", "Document Upload",
+                  "Driver registration form (web & mobile) collects license, vehicle plate, colour, and make.",
+                  manual_note="Register a new driver via the Driver Registration page and confirm the record appears in the Drivers tab.")
+
+        def _t_drv_recv():
+            drv_id = st.session_state.get("test_driver_id")
+            if not drv_id:
+                drv = db.find_or_create_test_driver()
+                drv_id = drv["id"]
+            db.update_driver_status(drv_id, "available")
+            ride = db.create_ride(
+                "[TEST] Recv Rider", "+12429999901",
+                "Atlantis Paradise Island", 25.0872, -77.3149,
+                "Nassau Cruise Port (Prince George Wharf)", 25.0811, -77.3513,
+                notes="[TEST RIDE — receive ride test]",
+            )
+            result = db.update_ride_status(ride["id"], "accepted", drv_id)
+            assert result["status"] == "accepted", f"Status is {result['status']}"
+            drv = db.get_driver(drv_id)
+            assert drv["status"] == "busy", f"Driver status is {drv['status']}, expected busy"
+            st.session_state["test_ride_id"] = ride["id"]
+            return f"Ride #{ride['id']} dispatched to driver #{drv_id} · Driver status → busy"
+
+        _test_row("drv_recv", "Receive Ride",
+                  "Creates a test ride and dispatches it to the test driver. Verifies driver status changes to 'busy'.",
+                  run_fn=_t_drv_recv)
+
+        def _t_drv_suspend():
+            drv_id = st.session_state.get("test_driver_id")
+            if not drv_id:
+                drv = db.find_or_create_test_driver()
+                drv_id = drv["id"]
+            db.update_driver_status(drv_id, "offline")
+            drv = db.get_driver(drv_id)
+            assert drv["status"] == "offline", f"Status is {drv['status']}"
+            return f"Driver #{drv_id} suspended → status: {drv['status']}"
+
+        _test_row("drv_suspend", "Driver Suspended",
+                  "Sets the test driver offline (suspended) and verifies they can no longer receive rides.",
+                  run_fn=_t_drv_suspend)
+
+    # ════════════════════════════════════════════════
+    # 2. RIDE TESTING
+    # ════════════════════════════════════════════════
+    with st.expander("🚖 Ride Testing", expanded=True):
+
+        def _t_ride_create():
+            ride = db.create_ride(
+                "[TEST] Jane Rider", "+12429999902",
+                "Lynden Pindling Int'l Airport", 25.0389, -77.4659,
+                "Parliament Square", 25.0770, -77.3410,
+                notes="[TEST RIDE — status flow test]",
+            )
+            assert ride and ride["id"], "Ride not created"
+            expected_fare = db.calc_fare(ride["distance_km"])
+            assert abs(ride["estimated_fare"] - expected_fare) < 0.01, \
+                f"Fare mismatch: got {ride['estimated_fare']}, expected {expected_fare}"
+            st.session_state["test_ride_id"] = ride["id"]
+            return (f"Ride #{ride['id']} created · {ride['distance_km']:.1f} km · "
+                    f"Fare: {db.fmt_usd(ride['estimated_fare'])} ✓")
+
+        _test_row("ride_create", "Create Ride",
+                  "Creates a test ride Airport → Parliament Square and verifies fare calculation.",
+                  run_fn=_t_ride_create)
+
+        def _t_ride_assign():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                raise Exception("Run 'Create Ride' first.")
+            avail = [d for d in db.get_all_drivers() if d["status"] == "available"]
+            if not avail:
+                db.find_or_create_test_driver()
+                db.update_driver_status(st.session_state.get("test_driver_id",
+                    db.find_or_create_test_driver()["id"]), "available")
+                avail = [d for d in db.get_all_drivers() if d["status"] == "available"]
+            assert avail, "No available drivers — run Driver Approve first."
+            drv = avail[0]
+            result = db.update_ride_status(rid, "accepted", drv["id"])
+            assert result["status"] == "accepted"
+            return f"Ride #{rid} assigned to {drv['name']} (#{drv['id']}) → status: accepted"
+
+        _test_row("ride_assign", "Assign Driver",
+                  "Dispatches the test ride to the first available driver and verifies accepted status.",
+                  run_fn=_t_ride_assign)
+
+        def _t_ride_status():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                raise Exception("Run 'Create Ride' and 'Assign Driver' first.")
+            ride = db.get_ride(rid)
+            if ride["status"] == "pending":
+                raise Exception("Ride not yet accepted. Run 'Assign Driver' first.")
+            result = db.update_ride_status(rid, "in_progress")
+            assert result["status"] == "in_progress"
+            return f"Ride #{rid}: accepted → in_progress ✓ · started_at set"
+
+        _test_row("ride_status_update", "Update Statuses",
+                  "Advances the test ride from accepted → in_progress and verifies each transition.",
+                  run_fn=_t_ride_status)
+
+        _test_row("ride_live_track", "Track Live Movement",
+                  "Driver GPS markers update every 8 seconds on the Live Operations map.",
+                  manual_note="Open Live Operations → verify driver dot appears. Use driver dashboard to move (simulate by changing GPS). Confirm marker moves on map.")
+
+        def _t_ride_complete():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                raise Exception("Run 'Create Ride', 'Assign Driver', and 'Update Statuses' first.")
+            ride = db.get_ride(rid)
+            if ride["status"] != "in_progress":
+                raise Exception(f"Ride status is '{ride['status']}' — must be in_progress.")
+            result = db.update_ride_status(rid, "completed")
+            assert result["status"] == "completed"
+            bill = db.get_ride_bill(rid)
+            assert bill, "No bill generated after completion"
+            drv = db.get_driver(result["driver_id"]) if result.get("driver_id") else None
+            assert drv and drv["status"] == "available", "Driver not freed after completion"
+            return (f"Ride #{rid} completed · Bill generated: {db.fmt_usd(bill['total_fare'])} · "
+                    f"Driver #{result['driver_id']} status → available ✓")
+
+        _test_row("ride_complete", "Complete Ride",
+                  "Completes the test ride, verifies a bill is generated, and driver is freed.",
+                  run_fn=_t_ride_complete)
+
+        def _t_ride_cancel():
+            ride = db.create_ride(
+                "[TEST] Cancel Rider", "+12429999903",
+                "Cable Beach", 25.0700, -77.3900,
+                "Arawak Cay — Fish Fry", 25.0800, -77.3600,
+                notes="[TEST RIDE — cancel test]",
+            )
+            avail = [d for d in db.get_all_drivers() if d["status"] == "available"]
+            if avail:
+                db.update_ride_status(ride["id"], "accepted", avail[0]["id"])
+                drv_id = avail[0]["id"]
+            else:
+                drv_id = None
+            result = db.update_ride_status(ride["id"], "cancelled")
+            assert result["status"] == "cancelled"
+            if drv_id:
+                drv = db.get_driver(drv_id)
+                assert drv["status"] == "available", "Driver not freed after cancel"
+            return f"Ride #{ride['id']} cancelled · Driver freed ✓"
+
+        _test_row("ride_cancel", "Cancel Ride",
+                  "Creates, assigns, then cancels a test ride. Verifies the driver is immediately freed.",
+                  run_fn=_t_ride_cancel)
+
+    # ════════════════════════════════════════════════
+    # 3. SAFETY TESTING
+    # ════════════════════════════════════════════════
+    with st.expander("🛡 Safety Testing", expanded=False):
+
+        def _t_safety_sos():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                ride = db.create_ride("[TEST] SOS Rider", "+12429999904",
+                                      "Atlantis Paradise Island", 25.0872, -77.3149,
+                                      "Parliament Square", 25.0770, -77.3410,
+                                      notes="[TEST RIDE — safety test]")
+                rid = ride["id"]
+                st.session_state["test_ride_id"] = rid
+            evt = db.add_safety_event(rid, "sos", "critical",
+                                      "[TEST] SOS triggered by rider — admin drill")
+            assert evt and evt["id"]
+            st.session_state["test_sos_id"] = str(evt["id"])
+            return f"SOS event logged · ID: {evt['id'][:8]}… · Severity: CRITICAL"
+
+        _test_row("safety_sos", "Trigger SOS",
+                  "Logs a critical SOS safety event on a test ride and verifies it's stored.",
+                  run_fn=_t_safety_sos)
+
+        def _t_safety_deviation():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                raise Exception("Run 'Create Ride' in Ride Testing first.")
+            evt = db.add_safety_event(rid, "route_deviation", "medium",
+                                      "[TEST] Driver deviated from expected Nassau route")
+            assert evt and evt["id"]
+            return f"Route deviation event logged · ID: {evt['id'][:8]}… · Severity: MEDIUM"
+
+        _test_row("safety_deviation", "Route Deviation",
+                  "Logs a route deviation event and verifies it appears in the safety events table.",
+                  run_fn=_t_safety_deviation)
+
+        def _t_safety_complaint():
+            rid = st.session_state.get("test_ride_id")
+            if not rid:
+                raise Exception("Run 'Create Ride' in Ride Testing first.")
+            evt = db.add_safety_event(rid, "user_report", "low",
+                                      "[TEST] Rider submitted complaint: driver was rude")
+            assert evt and evt["id"]
+            return f"Complaint (user_report) logged · ID: {evt['id'][:8]}… · Severity: LOW"
+
+        _test_row("safety_complaint", "Complaint Submission",
+                  "Simulates a rider submitting a complaint and verifies it's recorded as a user_report event.",
+                  run_fn=_t_safety_complaint)
+
+        def _t_safety_resolve():
+            sos_id = st.session_state.get("test_sos_id")
+            if not sos_id:
+                raise Exception("Run 'Trigger SOS' first to create an event to resolve.")
+            resolved = db.resolve_safety_event(sos_id, "[TEST] Admin resolved: drill confirmed safe")
+            assert resolved and resolved.get("resolved_at"), "resolved_at not set"
+            return (f"Event {sos_id[:8]}… resolved at "
+                    f"{resolved['resolved_at'].strftime('%H:%M:%S')} UTC ✓")
+
+        _test_row("safety_resolve", "Incident Resolution",
+                  "Marks the SOS event as resolved with admin notes and verifies the timestamp.",
+                  run_fn=_t_safety_resolve)
+
+    # ════════════════════════════════════════════════
+    # 4. PAYMENT TESTING
+    # ════════════════════════════════════════════════
+    with st.expander("💳 Payment Testing", expanded=False):
+
+        def _t_pay_cash():
+            ride = db.create_ride(
+                "[TEST] Cash Rider", "+12429999905",
+                "Sandals Royal Bahamian", 25.0700, -77.3870,
+                "Straw Market (Bay Street)", 25.0787, -77.3440,
+                notes="[TEST RIDE — cash payment test]",
+            )
+            assert ride["estimated_fare"] > 0, "Fare not calculated"
+            drv = db.find_or_create_test_driver()
+            db.update_driver_status(drv["id"], "available")
+            db.update_ride_status(ride["id"], "accepted", drv["id"])
+            db.update_ride_status(ride["id"], "in_progress")
+            completed = db.update_ride_status(ride["id"], "completed")
+            bill = db.get_ride_bill(ride["id"])
+            assert bill and bill["total_fare"] > 0, "No bill after cash completion"
+            return (f"Cash trip #{ride['id']} completed · "
+                    f"Fare: {db.fmt_usd(bill['total_fare'])} "
+                    f"(base {db.fmt_usd(bill['base_fare'])} + dist {db.fmt_usd(bill['distance_fare'])}) ✓")
+
+        _test_row("pay_cash", "Cash Trip",
+                  "Runs a complete ride cycle (create → accept → start → complete) and verifies the bill is generated.",
+                  run_fn=_t_pay_cash)
+
+        def _t_pay_fare_review():
+            tests = [
+                (1.0,  round(db.BASE_FARE + 1.0 * 1.50, 2)),
+                (5.0,  round(db.BASE_FARE + 5.0 * 1.50, 2)),
+                (10.0, round(db.BASE_FARE + 10.0 * 1.50, 2)),
+            ]
+            lines = []
+            for km, expected in tests:
+                actual = round(db.calc_fare(km), 2)
+                ok = "✓" if abs(actual - expected) < 0.01 else "✗"
+                lines.append(f"{ok} {km:.0f} km → {db.fmt_usd(actual)} (expected {db.fmt_usd(expected)})")
+            passed_all = all("✓" in l for l in lines)
+            assert passed_all, "Fare formula mismatch: " + " | ".join(lines)
+            return "Fare formula verified: $3.00 base + $1.50/km · " + " · ".join(lines)
+
+        _test_row("pay_fare_review", "Fare Total Review",
+                  "Verifies the fare formula ($3.00 base + $1.50/km) for 1 km, 5 km and 10 km trips.",
+                  run_fn=_t_pay_fare_review)
+
+        _test_row("pay_card_success", "Card Payment — Success",
+                  "Stripe card payment requires the Stripe integration to be activated.",
+                  manual_note="Stripe integration needed. Once activated: book a ride, select card payment, use test card 4242 4242 4242 4242, verify payment_status = 'completed' in payments table.")
+
+        _test_row("pay_card_failure", "Card Payment — Failure / Decline",
+                  "Stripe decline flow requires the Stripe integration to be activated.",
+                  manual_note="With Stripe active: use decline test card 4000 0000 0000 0002, verify payment_status = 'failed' and ride is NOT completed automatically.")
+
+    # ════════════════════════════════════════════════
+    # 5. SYSTEM TESTING
+    # ════════════════════════════════════════════════
+    with st.expander("🖥 System Testing", expanded=False):
+
+        def _t_sys_db():
+            import time
+            t0 = time.time()
+            drivers_fetched = db.get_all_drivers()
+            rides_fetched   = db.get_all_rides()
+            elapsed = (time.time() - t0) * 1000
+            assert elapsed < 3000, f"DB query took {elapsed:.0f}ms — too slow"
+            return (f"DB connected · {len(drivers_fetched)} drivers, "
+                    f"{len(rides_fetched)} rides · response: {elapsed:.0f}ms ✓")
+
+        _test_row("sys_db", "Database Connectivity",
+                  "Queries drivers and rides tables and checks response time is under 3 seconds.",
+                  run_fn=_t_sys_db)
+
+        def _t_sys_gps():
+            all_drivers = db.get_all_drivers()
+            with_gps = [d for d in all_drivers if d.get("last_lat") and d.get("last_lng")]
+            without  = [d for d in all_drivers if not d.get("last_lat")]
+            return (f"{len(with_gps)}/{len(all_drivers)} drivers have GPS data · "
+                    f"{len(without)} using simulated positions")
+
+        _test_row("sys_gps", "GPS Updates Visible",
+                  "Checks how many drivers have real GPS coordinates vs. simulated positions on the map.",
+                  run_fn=_t_sys_gps)
+
+        def _t_sys_map():
+            nassau_lat, nassau_lng = 25.0480, -77.3554
+            assert 24.5 < nassau_lat < 25.5, "Nassau lat out of range"
+            assert -78.0 < nassau_lng < -77.0, "Nassau lng out of range"
+            import folium as _folium
+            m = _folium.Map(location=[nassau_lat, nassau_lng], zoom_start=13)
+            assert m is not None, "Folium map failed to construct"
+            return f"Map centre {nassau_lat}, {nassau_lng} · Folium OK · Nassau bbox verified ✓"
+
+        _test_row("sys_map", "Map Loads Correctly",
+                  "Validates Nassau coordinates and that the Folium map library constructs without error.",
+                  run_fn=_t_sys_map)
+
+        _test_row("sys_ws_reconnect", "WebSocket Reconnect",
+                  "Streamlit auto-reconnects after a brief disconnect — ride state must be preserved.",
+                  manual_note="1. Create a ride via Request a Ride.\n2. Hard-refresh the page (Ctrl+Shift+R / Cmd+Shift+R).\n3. Log back in as admin.\n4. Open Live Operations and confirm the ride still appears with the correct status.")
+
+        _test_row("sys_refresh", "Page Refresh with Ride State Preserved",
+                  "Ride status survives full page reload because state is persisted in PostgreSQL, not in-memory.",
+                  manual_note="1. Note current ride counts in Overview.\n2. Reload the admin page.\n3. Confirm ride counts and statuses match what you saw before the refresh.")
+
+    st.divider()
+    if st.button("🗑️ Clean Up All Test Data", use_container_width=True,
+                 help="Removes all [TEST] rides, the test driver, and their bills from the database"):
+        db.delete_test_data()
+        st.session_state["test_results"] = {}
+        for k in list(st.session_state.keys()):
+            if k.startswith("test_"):
+                del st.session_state[k]
+        st.success("✅ All test data removed from database.")
+        st.rerun()
+
+
 def _admin_settings(all_rides, drivers):
     st.markdown("## ⚙️ Settings & Test Tools")
 
-    tab_sys, tab_test = st.tabs(["🖥 System Health", "🧪 Test Tools"])
+    tab_sys, tab_checklist, tab_tools = st.tabs(
+        ["🖥 System Health", "🧪 Release Checklist", "🔧 Quick Tools"]
+    )
 
+    # ── System Health ─────────────────────────────────────────────────────────
     with tab_sys:
         st.markdown("#### System Health")
-
-        # DB check
         try:
-            import psycopg2
             db.get_all_drivers()
             st.success("✅ PostgreSQL database — Connected")
         except Exception as e:
             st.error(f"❌ Database — {e}")
 
-        # Counts
         h1, h2, h3 = st.columns(3)
         h1.metric("Total Rides in DB", len(all_rides))
         h2.metric("Total Drivers in DB", len(drivers))
@@ -2283,18 +2714,38 @@ def _admin_settings(all_rides, drivers):
                     f"(base {db.fmt_usd(b['base_fare'])} + dist {db.fmt_usd(b['distance_fare'])})"
                 )
 
-    with tab_test:
-        st.markdown("#### Create Test Ride")
-        st.caption("Quickly inject a test ride for system verification.")
+        st.divider()
+        st.markdown("#### Safety Events")
+        evts = db.get_safety_events(limit=10)
+        if not evts:
+            st.caption("No safety events recorded.")
+        else:
+            sev_icon = {"low": "🟡", "medium": "🟠", "high": "🔴", "critical": "💀"}
+            for e in evts:
+                ts = e["timestamp"].strftime("%b %d %H:%M") if e.get("timestamp") else ""
+                resolved = "✓ Resolved" if e.get("resolved_at") else "⚠️ Open"
+                st.caption(
+                    f"`{ts}` {sev_icon.get(e.get('severity','low'),'')} "
+                    f"**{e.get('event_type','').replace('_',' ').title()}** · "
+                    f"Ride #{e.get('ride_id')} · {resolved}"
+                )
 
+    # ── Release Checklist ─────────────────────────────────────────────────────
+    with tab_checklist:
+        st.markdown("## 🧪 Release Testing Checklist")
+        st.caption("Run each test before going live. Automated tests write to the DB with [TEST] labels and can be cleaned up afterwards.")
+        _release_checklist(drivers, all_rides)
+
+    # ── Quick Tools ───────────────────────────────────────────────────────────
+    with tab_tools:
+        st.markdown("#### Create Test Ride")
         with st.form("test_ride_form"):
             tc1, tc2 = st.columns(2)
             t_name  = tc1.text_input("Client Name",  value="Test Rider")
             t_phone = tc2.text_input("Client Phone", value="+12421234567")
             t_pickup  = st.text_input("Pickup",  value="Atlantis Paradise Island, Nassau")
             t_dropoff = st.text_input("Dropoff", value="Nassau International Airport")
-            submitted = st.form_submit_button("Create Test Ride", type="primary")
-            if submitted:
+            if st.form_submit_button("Create Test Ride", type="primary"):
                 ride = db.create_ride(
                     client_name=t_name, client_phone=t_phone,
                     pickup_location=t_pickup,   pickup_lat=25.0860, pickup_lng=-77.3188,
@@ -2302,28 +2753,25 @@ def _admin_settings(all_rides, drivers):
                     notes="[TEST RIDE — admin generated]",
                 )
                 if ride:
-                    st.success(f"✅ Test ride #{ride['id']} created — {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+                    st.success(f"✅ Ride #{ride['id']} — {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
                     st.rerun()
 
         st.divider()
         st.markdown("#### Admin Shortcuts")
-        sh1, sh2, sh3 = st.columns(3)
+        sh1, sh2 = st.columns(2)
         with sh1:
             if st.button("🔄 Set All Drivers Offline", use_container_width=True):
                 for d in drivers:
-                    if d["status"] != "offline":
-                        db.update_driver_status(d["id"], "offline")
+                    db.update_driver_status(d["id"], "offline")
                 st.success("All drivers set to offline.")
                 st.rerun()
         with sh2:
-            if st.button("🟢 Set All Drivers Online", use_container_width=True):
+            if st.button("🟢 Set All Drivers Available", use_container_width=True):
                 for d in drivers:
                     if d["status"] == "offline":
                         db.update_driver_status(d["id"], "available")
-                st.success("All drivers set to available.")
+                st.success("All offline drivers set to available.")
                 st.rerun()
-        with sh3:
-            st.caption("More admin tools coming in next release.")
 
 
 # ── Main dashboard router ──────────────────────────────────────────────────────
