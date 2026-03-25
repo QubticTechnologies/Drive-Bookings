@@ -4,6 +4,8 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
+  Alert,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -34,6 +36,14 @@ const STATUS_CONFIG = {
     desc: "Searching for the nearest available driver…",
     step: 0,
   },
+  scheduled: {
+    label: "Scheduled",
+    color: COLORS.blue,
+    bg: COLORS.blueDim,
+    icon: "calendar-outline" as const,
+    desc: "Your ride is confirmed. We'll match you with a driver before your pickup time.",
+    step: 0,
+  },
   accepted: {
     label: "Driver on the Way",
     color: COLORS.blue,
@@ -60,7 +70,7 @@ const STATUS_CONFIG = {
   },
   cancelled: {
     label: "Cancelled",
-    color: COLORS.error,
+    color: "#ff6b6b",
     bg: "rgba(239,68,68,0.12)",
     icon: "close-circle-outline" as const,
     desc: "This ride was cancelled.",
@@ -69,6 +79,18 @@ const STATUS_CONFIG = {
 };
 
 const STEPS = ["Finding", "Driver Assigned", "En Route", "Arrived"];
+
+// Helper: format ISO timestamp → "Mar 25, 14:32"
+function fmtTs(ts: string | null | undefined): string {
+  if (!ts) return "";
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString("en-US", {
+      month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    });
+  } catch { return ""; }
+}
 
 function PulsingRing() {
   const scale = useSharedValue(1);
@@ -85,6 +107,37 @@ function PulsingRing() {
     <Animated.View
       style={[{ position: "absolute", width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.warning }, style]}
     />
+  );
+}
+
+// Ride timeline (timestamps for each stage)
+function RideTimeline({ ride }: { ride: any }) {
+  const events: { label: string; ts: string | null | undefined; color: string }[] = [
+    { label: "Ride Requested",    ts: ride.createdAt,   color: COLORS.textSub },
+    { label: "Driver Assigned",   ts: ride.acceptedAt,  color: COLORS.blue },
+    { label: "Ride Started",      ts: ride.startedAt,   color: COLORS.accent },
+    { label: "Completed",         ts: ride.completedAt, color: COLORS.success },
+  ];
+
+  const activeEvents = events.filter((e) => e.ts);
+  if (activeEvents.length < 2) return null;
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Ride Timeline</Text>
+      {activeEvents.map((evt, idx) => (
+        <View key={evt.label} style={{ flexDirection: "row", alignItems: "flex-start", gap: 14 }}>
+          <View style={{ alignItems: "center", width: 14 }}>
+            <View style={[styles.tlDot, { backgroundColor: evt.color }]} />
+            {idx < activeEvents.length - 1 && <View style={styles.tlLine} />}
+          </View>
+          <View style={{ flex: 1, paddingBottom: idx < activeEvents.length - 1 ? 14 : 0 }}>
+            <Text style={[styles.tlLabel, { color: evt.color }]}>{evt.label}</Text>
+            <Text style={styles.tlTime}>{fmtTs(evt.ts)}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -127,6 +180,20 @@ export default function TrackScreen() {
 
   const status = STATUS_CONFIG[ride.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.pending;
   const isActive = !["completed", "cancelled"].includes(ride.status);
+  const isInProgress = ride.status === "in_progress";
+
+  // Fare breakdown
+  const baseFare = 3.0;
+  const distFare = Math.round(1.5 * ride.distanceKm * 100) / 100;
+  const totalFare = ride.estimatedFare;
+
+  // Cast to any for optional fields not guaranteed in generated types
+  const r = ride as any;
+  const scheduledAt: string | null = r.scheduledAt ?? null;
+  const acceptedAt: string | null  = r.acceptedAt ?? null;
+  const startedAt: string | null   = r.startedAt ?? null;
+  const completedAt: string | null = r.completedAt ?? null;
+  const rideNotes: string | null   = r.notes ?? null;
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -151,10 +218,17 @@ export default function TrackScreen() {
           </View>
           <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
           <Text style={styles.statusDesc}>{status.desc}</Text>
+          {/* Scheduled badge */}
+          {scheduledAt && ride.status === "scheduled" && (
+            <View style={styles.scheduledBadge}>
+              <Ionicons name="calendar" size={13} color={COLORS.blue} />
+              <Text style={styles.scheduledText}>Scheduled for {fmtTs(scheduledAt)}</Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* Stepper */}
-        {ride.status !== "cancelled" && (
+        {ride.status !== "cancelled" && ride.status !== "scheduled" && (
           <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.stepper}>
             {STEPS.map((step, idx) => {
               const isPast = idx < status.step;
@@ -201,10 +275,26 @@ export default function TrackScreen() {
             </View>
           </View>
 
+          {/* Notes */}
+          {rideNotes ? (
+            <>
+              <View style={[styles.divider, { marginVertical: 14 }]} />
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                <Feather name="message-square" size={14} color={COLORS.textSub} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tripLabel}>Ride Notes</Text>
+                  <Text style={[styles.tripValue, { fontSize: 14 }]}>{rideNotes}</Text>
+                </View>
+              </View>
+            </>
+          ) : null}
+
           <View style={styles.fareRow}>
             <View>
-              <Text style={styles.tripLabel}>Estimated Fare</Text>
-              <Text style={styles.fareAmt}>${ride.estimatedFare.toFixed(2)}</Text>
+              <Text style={styles.tripLabel}>
+                {ride.status === "completed" ? "Final Fare" : "Estimated Fare"}
+              </Text>
+              <Text style={styles.fareAmt}>${totalFare.toFixed(2)}</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.tripLabel}>Distance</Text>
@@ -212,6 +302,46 @@ export default function TrackScreen() {
             </View>
           </View>
         </Animated.View>
+
+        {/* Fare breakdown (completed only) */}
+        {ride.status === "completed" && (
+          <Animated.View entering={FadeInDown.delay(250).springify()} style={styles.card}>
+            <Text style={styles.cardTitle}>Fare Breakdown</Text>
+            <View style={styles.fareBreakRow}>
+              <Text style={styles.fareBreakLabel}>Base fare</Text>
+              <Text style={styles.fareBreakVal}>${baseFare.toFixed(2)}</Text>
+            </View>
+            <View style={styles.fareBreakRow}>
+              <Text style={styles.fareBreakLabel}>Distance ({ride.distanceKm.toFixed(1)} km × $1.50)</Text>
+              <Text style={styles.fareBreakVal}>${distFare.toFixed(2)}</Text>
+            </View>
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+            <View style={styles.fareBreakRow}>
+              <Text style={[styles.fareBreakLabel, { color: COLORS.text, fontFamily: "Inter_600SemiBold" }]}>Total</Text>
+              <Text style={[styles.fareBreakVal, { color: COLORS.success, fontSize: 20, fontFamily: "Inter_700Bold" }]}>
+                ${totalFare.toFixed(2)}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11, color: COLORS.textMuted, fontFamily: "Inter_400Regular", marginTop: 8 }}>
+              Cash · USD/BSD accepted
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Cancellation info */}
+        {ride.status === "cancelled" && (
+          <Animated.View entering={FadeInDown.delay(250).springify()}
+            style={[styles.card, { borderColor: "#ff6b6b44" }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Ionicons name="close-circle" size={20} color="#ff6b6b" />
+              <Text style={[styles.cardTitle, { color: "#ff6b6b", marginBottom: 0 }]}>Ride Cancelled</Text>
+            </View>
+            <Text style={{ marginTop: 10, fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, lineHeight: 20 }}>
+              This ride was cancelled. No charge has been applied.{"\n"}
+              You can book a new ride anytime.
+            </Text>
+          </Animated.View>
+        )}
 
         {/* Driver info */}
         <Animated.View entering={FadeInDown.delay(300).springify()} style={styles.card}>
@@ -247,9 +377,38 @@ export default function TrackScreen() {
           )}
         </Animated.View>
 
+        {/* Timeline */}
+        <Animated.View entering={FadeInDown.delay(350).springify()}>
+          <RideTimeline ride={{ ...ride, acceptedAt, startedAt, completedAt, createdAt: r.createdAt }} />
+        </Animated.View>
+
+        {/* SOS — only when actively in progress */}
+        {isInProgress && (
+          <Animated.View entering={FadeInDown.delay(400).springify()} style={{ paddingHorizontal: 20, marginBottom: 14 }}>
+            <Pressable
+              style={styles.sosBtn}
+              onPress={() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                Alert.alert(
+                  "🆘 Emergency Contact",
+                  "Do you need to call for help?",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Call 919 (Police)", onPress: () => Linking.openURL("tel:919") },
+                    { text: "Call 242-302-2221 (GoRide)", onPress: () => Linking.openURL("tel:2423022221") },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="alert-circle" size={22} color="#fff" />
+              <Text style={styles.sosBtnText}>Emergency / SOS</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
         {/* Done actions */}
         {!isActive && (
-          <Animated.View entering={FadeInDown.delay(400).springify()} style={{ paddingHorizontal: 20 }}>
+          <Animated.View entering={FadeInDown.delay(420).springify()} style={{ paddingHorizontal: 20 }}>
             <Pressable
               style={styles.bookAgainBtn}
               onPress={() => {
@@ -276,6 +435,8 @@ const styles = StyleSheet.create({
   statusHero: { marginHorizontal: 20, borderRadius: 20, padding: 24, alignItems: "center", gap: 10, borderWidth: 1, marginBottom: 20 },
   statusLabel: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   statusDesc: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center" },
+  scheduledBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: COLORS.blueDim, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginTop: 8 },
+  scheduledText: { fontSize: 13, fontFamily: "Inter_500Medium", color: COLORS.blue },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 20, marginBottom: 20 },
   stepItem: { alignItems: "center", gap: 6 },
   stepDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.border },
@@ -287,8 +448,12 @@ const styles = StyleSheet.create({
   tripDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   tripLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: COLORS.textSub, textTransform: "uppercase", letterSpacing: 0.5 },
   tripValue: { fontSize: 15, fontFamily: "Inter_500Medium", color: COLORS.text, marginTop: 2 },
+  divider: { height: 1, backgroundColor: COLORS.border },
   fareRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.border },
   fareAmt: { fontSize: 22, fontFamily: "Inter_700Bold", color: COLORS.text, marginTop: 4 },
+  fareBreakRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  fareBreakLabel: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub },
+  fareBreakVal: { fontSize: 15, fontFamily: "Inter_500Medium", color: COLORS.text },
   driverRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
   driverAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.cardElevated, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: COLORS.border },
   driverName: { fontSize: 18, fontFamily: "Inter_600SemiBold", color: COLORS.text },
@@ -299,6 +464,12 @@ const styles = StyleSheet.create({
   waitingDriver: { alignItems: "center", paddingVertical: 20, gap: 12 },
   loadingSpinner: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: COLORS.border, borderTopColor: COLORS.accent },
   waitingText: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub },
+  tlDot: { width: 10, height: 10, borderRadius: 5 },
+  tlLine: { width: 2, flex: 1, minHeight: 20, backgroundColor: COLORS.border, marginTop: 4 },
+  tlLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  tlTime: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textMuted, marginTop: 2 },
+  sosBtn: { backgroundColor: "#c0392b", borderRadius: 16, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  sosBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff", letterSpacing: 0.3 },
   bookAgainBtn: { backgroundColor: COLORS.accentDim, borderRadius: 16, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderWidth: 1, borderColor: "rgba(173,255,0,0.25)" },
   bookAgainText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: COLORS.accent },
 });

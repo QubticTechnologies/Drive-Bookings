@@ -3,7 +3,7 @@ import { useCreateRide } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -177,6 +177,7 @@ function LocationPicker({
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsResult, setGpsResult] = useState<Place | null>(null);
+  const [gpsLandmark, setGpsLandmark] = useState<{ place: Place; distM: number } | null>(null);
   const [gpsErr, setGpsErr] = useState("");
 
   const [pasteText, setPasteText] = useState("");
@@ -186,10 +187,18 @@ function LocationPicker({
 
   const reset = () => {
     setFilter(""); setSearchQ(""); setSearchResults([]); setSearchErr("");
-    setGpsResult(null); setGpsErr("");
+    setGpsResult(null); setGpsLandmark(null); setGpsErr("");
     setPasteText(""); setPasteResult(null); setPasteErr("");
     setTab("places");
   };
+
+  // Auto-fire GPS as soon as user switches to the GPS tab
+  useEffect(() => {
+    if (tab === "gps" && allowGps && !gpsResult && !gpsLoading) {
+      doGps();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const handleClose = () => { reset(); onClose(); };
   const handleSelect = (place: Place) => {
@@ -211,14 +220,23 @@ function LocationPicker({
   };
 
   const doGps = async () => {
-    setGpsLoading(true); setGpsErr(""); setGpsResult(null);
+    setGpsLoading(true); setGpsErr(""); setGpsResult(null); setGpsLandmark(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") { setGpsErr("Location permission denied. Enable it in Settings."); setGpsLoading(false); return; }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude: lat, longitude: lng } = pos.coords;
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       const name = await nominatimReverse(lat, lng);
-      setGpsResult({ name, hint: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng });
+      setGpsResult({ name, hint: `${lat.toFixed(5)}, ${lng.toFixed(5)} · ±${Math.round(accuracy ?? 0)}m`, lat, lng });
+      // Find nearest Nassau landmark
+      const allPlaces = getAllPlaces();
+      let nearestPlace: Place | null = null;
+      let nearestDist = Infinity;
+      for (const p of allPlaces) {
+        const d = haversine(lat, lng, p.lat, p.lng) * 1000; // metres
+        if (d < nearestDist) { nearestDist = d; nearestPlace = p; }
+      }
+      if (nearestPlace) setGpsLandmark({ place: nearestPlace, distM: Math.round(nearestDist) });
     } catch { setGpsErr("Could not get your location. Please try again."); }
     setGpsLoading(false);
   };
@@ -340,25 +358,91 @@ function LocationPicker({
 
         {/* ── GPS ── */}
         {tab === "gps" && (
-          <View style={[pickerStyles.tabContent, { alignItems: "center", paddingTop: 36 }]}>
-            <View style={pickerStyles.gpsIcon}><Feather name="navigation" size={32} color={COLORS.accent} /></View>
-            <Text style={pickerStyles.gpsTitle}>Use My Current Location</Text>
-            <Text style={pickerStyles.gpsHint}>We'll detect where you are right now and use it as your pickup.</Text>
-            {gpsErr ? <Text style={pickerStyles.errorText}>{gpsErr}</Text> : null}
-            {gpsResult ? (
-              <View style={pickerStyles.resultRow}>
-                <Feather name="check-circle" size={20} color={COLORS.success} />
-                <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{gpsResult.name}</Text><Text style={pickerStyles.placeHint}>{gpsResult.hint}</Text></View>
-                <Pressable style={pickerStyles.useBtn} onPress={() => handleSelect(gpsResult!)}>
-                  <Text style={pickerStyles.useBtnText}>Use This</Text>
+          <ScrollView style={pickerStyles.tabContent} showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Loading state */}
+            {gpsLoading && (
+              <View style={{ alignItems: "center", paddingTop: 32, gap: 16 }}>
+                <View style={pickerStyles.gpsIcon}>
+                  <ActivityIndicator size="large" color={COLORS.accent} />
+                </View>
+                <Text style={pickerStyles.gpsTitle}>Detecting Your Location…</Text>
+                <Text style={pickerStyles.gpsHint}>Finding the best GPS fix — this takes just a moment.</Text>
+              </View>
+            )}
+
+            {/* Error state */}
+            {!gpsLoading && gpsErr ? (
+              <View style={{ alignItems: "center", paddingTop: 32, gap: 16 }}>
+                <View style={[pickerStyles.gpsIcon, { backgroundColor: "rgba(239,68,68,0.12)" }]}>
+                  <Feather name="alert-circle" size={32} color="#ff6b6b" />
+                </View>
+                <Text style={pickerStyles.errorText}>{gpsErr}</Text>
+                <Pressable style={pickerStyles.actionBtn} onPress={doGps}>
+                  <Feather name="refresh-cw" size={18} color={COLORS.bg} />
+                  <Text style={pickerStyles.actionBtnText}>Try Again</Text>
                 </Pressable>
               </View>
-            ) : (
-              <Pressable style={pickerStyles.actionBtn} onPress={doGps} disabled={gpsLoading}>
-                {gpsLoading ? <ActivityIndicator color={COLORS.bg} /> : <><Feather name="crosshair" size={18} color={COLORS.bg} /><Text style={pickerStyles.actionBtnText}>Detect My Location</Text></>}
-              </Pressable>
+            ) : null}
+
+            {/* GPS found — two confirm options */}
+            {!gpsLoading && gpsResult && (
+              <>
+                {/* Exact GPS card */}
+                <View style={pickerStyles.gpsCard}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <View style={[pickerStyles.gpsIconSm, { backgroundColor: COLORS.accentDim }]}>
+                      <Feather name="crosshair" size={16} color={COLORS.accent} />
+                    </View>
+                    <Text style={pickerStyles.gpsCardTitle}>📍 Your Location Found</Text>
+                  </View>
+                  <Text style={pickerStyles.placeName}>{gpsResult.name}</Text>
+                  <Text style={[pickerStyles.placeHint, { marginTop: 3, marginBottom: 14 }]}>{gpsResult.hint}</Text>
+                  <Pressable style={pickerStyles.actionBtn} onPress={() => handleSelect(gpsResult!)}>
+                    <Feather name="check" size={18} color={COLORS.bg} />
+                    <Text style={pickerStyles.actionBtnText}>Use My Exact Location</Text>
+                  </Pressable>
+                </View>
+
+                {/* Nearest landmark card */}
+                {gpsLandmark && (
+                  <View style={[pickerStyles.gpsCard, { marginTop: 14, backgroundColor: COLORS.cardElevated }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <View style={[pickerStyles.gpsIconSm, { backgroundColor: COLORS.warningDim }]}>
+                        <Feather name="map-pin" size={16} color={COLORS.warning} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={pickerStyles.gpsCardTitle}>Nearest Landmark</Text>
+                        <Text style={[pickerStyles.placeHint, { marginTop: 1 }]}>
+                          {gpsLandmark.distM < 1000
+                            ? `${gpsLandmark.distM}m away`
+                            : `${(gpsLandmark.distM / 1000).toFixed(1)}km away`}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={pickerStyles.placeName}>{gpsLandmark.place.name}</Text>
+                    <Text style={[pickerStyles.placeHint, { marginTop: 3, marginBottom: 14 }]}>{gpsLandmark.place.hint}</Text>
+                    <Pressable
+                      style={[pickerStyles.actionBtn, { backgroundColor: COLORS.cardElevated, borderWidth: 1, borderColor: COLORS.border }]}
+                      onPress={() => handleSelect(gpsLandmark.place)}
+                    >
+                      <Feather name="map-pin" size={18} color={COLORS.warning} />
+                      <Text style={[pickerStyles.actionBtnText, { color: COLORS.warning }]}>
+                        Use {gpsLandmark.place.name.split(" ")[0]}…
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* Retry link */}
+                <Pressable style={{ alignItems: "center", marginTop: 16 }} onPress={doGps}>
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: COLORS.textSub }}>
+                    Refresh GPS fix
+                  </Text>
+                </Pressable>
+              </>
             )}
-          </View>
+          </ScrollView>
         )}
 
         {/* ── PASTE ── */}
@@ -421,8 +505,11 @@ const pickerStyles = StyleSheet.create({
   placeHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub },
   errorText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#ff6b6b", marginTop: 10, textAlign: "center" },
   gpsIcon: { width: 72, height: 72, borderRadius: 22, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  gpsIconSm: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   gpsTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: COLORS.text, marginBottom: 8 },
-  gpsHint: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center", lineHeight: 20, marginBottom: 24, paddingHorizontal: 10 },
+  gpsHint: { fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.textSub, textAlign: "center", lineHeight: 20, marginBottom: 12, paddingHorizontal: 10 },
+  gpsCard: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border },
+  gpsCardTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: COLORS.text },
   actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: COLORS.accent, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 24, marginTop: 4 },
   actionBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: COLORS.bg },
   resultRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.card, borderRadius: 14, padding: 14, marginTop: 20, borderWidth: 1, borderColor: COLORS.border, width: "100%" },
