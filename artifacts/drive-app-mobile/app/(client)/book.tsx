@@ -289,21 +289,22 @@ function LocationPicker({
 
         {/* ── PLACES ── */}
         {tab === "places" && (
-          <>
+          <View style={{ flex: 1 }}>
             <View style={pickerStyles.searchBox}>
               <Feather name="search" size={16} color={COLORS.textSub} />
               <TextInput style={pickerStyles.searchInput} placeholder="Filter places…"
                 placeholderTextColor={COLORS.textMuted} value={filter} onChangeText={setFilter} />
               {filter.length > 0 && <Pressable onPress={() => setFilter("")} hitSlop={8}><Feather name="x-circle" size={16} color={COLORS.textSub} /></Pressable>}
             </View>
-            <FlatList data={filteredPlaces ?? CATEGORIES} keyExtractor={(_, i) => String(i)}
+            <FlatList style={{ flex: 1 }} data={filteredPlaces ?? CATEGORIES} keyExtractor={(_, i) => String(i)}
               showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => {
                 if (filteredPlaces) {
                   const place = item as Place;
                   return (
                     <Pressable style={pickerStyles.placeRow} onPress={() => handleSelect(place)}>
-                      <View style={pickerStyles.placeIcon}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
+                      <View style={[pickerStyles.placeIcon, { marginRight: 14 }]}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
                       <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{place.name}</Text><Text style={pickerStyles.placeHint}>{place.hint}</Text></View>
                     </Pressable>
                   );
@@ -317,7 +318,7 @@ function LocationPicker({
                     </View>
                     {cat.places.map((place) => (
                       <Pressable key={place.name} style={pickerStyles.placeRow} onPress={() => handleSelect(place)}>
-                        <View style={pickerStyles.placeIcon}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
+                        <View style={[pickerStyles.placeIcon, { marginRight: 14 }]}><Ionicons name="location-outline" size={16} color={COLORS.textSub} /></View>
                         <View style={{ flex: 1 }}><Text style={pickerStyles.placeName}>{place.name}</Text><Text style={pickerStyles.placeHint}>{place.hint}</Text></View>
                       </Pressable>
                     ))}
@@ -325,7 +326,7 @@ function LocationPicker({
                 );
               }}
             />
-          </>
+          </View>
         )}
 
         {/* ── SEARCH ── */}
@@ -499,7 +500,7 @@ const pickerStyles = StyleSheet.create({
   searchBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" },
   catHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
   catTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textTransform: "uppercase" },
-  placeRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  placeRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   placeIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: COLORS.card, alignItems: "center", justifyContent: "center" },
   placeName: { fontSize: 15, fontFamily: "Inter_500Medium", color: COLORS.text, marginBottom: 2 },
   placeHint: { fontSize: 12, fontFamily: "Inter_400Regular", color: COLORS.textSub },
