@@ -264,7 +264,7 @@ with col_logo:
   </span>
   <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;">GoRide</span>
 </span>
-
+<br><span style="font-size:12px;color:#6b9aa2;letter-spacing:0.3px;">Go Further<span style="color:#FFC72C;">.</span></span>
 """, unsafe_allow_html=True)
 with col_mode:
     if st.session_state.mode == "driver":
