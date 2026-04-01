@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { MapPin, Navigation, Car, Star, Phone, FileText, User, Clock } from "lucide-react";
+import { MapPin, Navigation, Car, Star, Phone, FileText, User, Clock, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGetRide } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/store/use-session";
 import { formatCurrency } from "@/lib/utils";
+
+interface RideMsg { id: number; sender: string; senderType: string; body: string; createdAt: string; }
+
+function fmtTs(ts: string) {
+  try { return new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }); }
+  catch { return ""; }
+}
 
 function calcEtaMin(acceptedAt: string | null | undefined): number | null {
   if (!acceptedAt) return null;
@@ -21,11 +28,13 @@ export default function ClientRideTracker() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const { setActiveRideId } = useSession();
+  const [messages, setMessages] = useState<RideMsg[]>([]);
+  const msgSeen = useRef<Set<number>>(new Set());
 
   const { data: ride, isLoading } = useGetRide(parseInt(id || "0", 10), {
     query: {
       enabled: !!id,
-      refetchInterval: 3000 // Poll intensely for live feel
+      refetchInterval: 3000
     }
   });
 
@@ -34,6 +43,25 @@ export default function ClientRideTracker() {
       setActiveRideId(null);
     }
   }, [ride?.status, setActiveRideId]);
+
+  useEffect(() => {
+    if (!id) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/rides/${id}/messages`);
+        if (!res.ok) return;
+        const data: RideMsg[] = await res.json();
+        const newMsgs = data.filter((m) => !msgSeen.current.has(m.id));
+        if (newMsgs.length > 0) {
+          newMsgs.forEach((m) => msgSeen.current.add(m.id));
+          setMessages(data);
+        }
+      } catch {}
+    };
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 4000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   if (isLoading || !ride) {
     return <Layout><div className="flex justify-center p-20 animate-pulse">Loading ride details...</div></Layout>;
@@ -194,6 +222,33 @@ export default function ClientRideTracker() {
             </div>
           </Card>
         </div>
+
+        {/* GoRide Messages */}
+        {messages.length > 0 && (
+          <Card>
+            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border">
+              <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-4 h-4 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg">Messages from GoRide</h3>
+            </div>
+            <div className="space-y-3">
+              {messages.map((msg) => (
+                <div key={msg.id} className="bg-secondary/40 rounded-2xl rounded-tl p-4 border border-white/5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-black">GR</span>
+                    </div>
+                    <span className="text-xs font-semibold text-primary">GoRide</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{fmtTs(msg.createdAt)}</span>
+                  </div>
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{msg.body}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
       </div>
     </Layout>
   );

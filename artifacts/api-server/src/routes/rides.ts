@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, ridesTable, driversTable, billsTable } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { db, ridesTable, driversTable, billsTable, rideMessagesTable } from "@workspace/db";
+import { eq, and, isNull, asc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -173,9 +173,25 @@ router.patch("/rides/:rideId/status", async (req, res) => {
 
     if (status === "accepted") {
       if (!driverId) return res.status(400).json({ error: "driverId required when accepting a ride" });
-      updates.driverId = parseInt(driverId);
+      const acceptedDriverId = parseInt(driverId);
+      updates.driverId = acceptedDriverId;
       updates.acceptedAt = new Date();
-      await db.update(driversTable).set({ status: "busy" }).where(eq(driversTable.id, parseInt(driverId)));
+      await db.update(driversTable).set({ status: "busy" }).where(eq(driversTable.id, acceptedDriverId));
+
+      // Fetch driver info for auto-messages
+      const [acceptedDriver] = await db.select().from(driversTable).where(eq(driversTable.id, acceptedDriverId));
+      const fare = existingRide.estimatedFare.toFixed(2);
+      const distMi = (existingRide.distanceKm * 0.621371).toFixed(1);
+
+      const confirmMsg = `✅ Your GoRide booking #${rideId} is confirmed! Thank you for choosing GoRide — Nassau's trusted ride service. We're matching you with a driver now.`;
+      const driverMsg = acceptedDriver
+        ? `🚗 Driver on the way! ${acceptedDriver.name} is heading to you.\n\nVehicle: ${acceptedDriver.vehicleColor} ${acceptedDriver.vehicleYear} ${acceptedDriver.vehicleMake} ${acceptedDriver.vehicleModel}\nPlate: ${acceptedDriver.vehiclePlate}\nRating: ⭐ ${acceptedDriver.rating.toFixed(1)}\n\nETA: ~10 min · Estimated fare: $${fare} (~${distMi} mi)`
+        : `🚗 A driver has been assigned to your ride. Estimated fare: $${fare}. ETA ~10 min.`;
+
+      await db.insert(rideMessagesTable).values([
+        { rideId, sender: "GoRide", senderType: "system", body: confirmMsg },
+        { rideId, sender: "GoRide", senderType: "system", body: driverMsg },
+      ]);
     }
     if (status === "in_progress") {
       updates.startedAt = new Date();
@@ -224,6 +240,23 @@ router.patch("/rides/:rideId/status", async (req, res) => {
     return res.json(formatRide(updatedRide, driver));
   } catch (err) {
     req.log.error({ err }, "Failed to update ride status");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/rides/:rideId/messages
+router.get("/rides/:rideId/messages", async (req, res) => {
+  try {
+    const rideId = parseInt(req.params.rideId);
+    if (isNaN(rideId)) return res.status(400).json({ error: "Invalid ride ID" });
+    const msgs = await db
+      .select()
+      .from(rideMessagesTable)
+      .where(eq(rideMessagesTable.rideId, rideId))
+      .orderBy(asc(rideMessagesTable.createdAt));
+    return res.json(msgs);
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch ride messages");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

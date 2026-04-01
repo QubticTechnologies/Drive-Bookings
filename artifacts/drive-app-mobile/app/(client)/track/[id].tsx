@@ -1,8 +1,8 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useGetRide } from "@workspace/api-client-react";
+import { useGetRide, getBaseUrl } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Linking,
@@ -80,6 +80,14 @@ const STATUS_CONFIG = {
 
 const STEPS = ["Finding", "Driver Assigned", "En Route", "Arrived"];
 
+interface RideMsg {
+  id: number;
+  sender: string;
+  senderType: string;
+  body: string;
+  createdAt: string;
+}
+
 // Helper: format ISO timestamp → "Mar 25, 14:32"
 function fmtTs(ts: string | null | undefined): string {
   if (!ts) return "";
@@ -146,6 +154,29 @@ export default function TrackScreen() {
   const insets = useSafeAreaInsets();
   const { setActiveRideId } = useApp();
   const prevStatus = useRef<string | null>(null);
+  const [messages, setMessages] = useState<RideMsg[]>([]);
+  const msgSeen = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!id) return;
+    const fetchMsgs = async () => {
+      try {
+        const base = getBaseUrl() ?? "";
+        const res = await fetch(`${base}/api/rides/${id}/messages`);
+        if (!res.ok) return;
+        const data: RideMsg[] = await res.json();
+        const newMsgs = data.filter((m) => !msgSeen.current.has(m.id));
+        if (newMsgs.length > 0) {
+          newMsgs.forEach((m) => msgSeen.current.add(m.id));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setMessages(data);
+        }
+      } catch {}
+    };
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 4000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const { data: ride, isLoading } = useGetRide(parseInt(id ?? "0", 10), {
     query: {
@@ -381,6 +412,45 @@ export default function TrackScreen() {
         <Animated.View entering={FadeInDown.delay(350).springify()}>
           <RideTimeline ride={{ ...ride, acceptedAt, startedAt, completedAt, createdAt: r.createdAt }} />
         </Animated.View>
+
+        {/* GoRide Messages */}
+        {messages.length > 0 && (
+          <View style={[styles.card, { marginTop: 0 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.accentDim, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(173,255,0,0.25)" }}>
+                <Ionicons name="chatbubble-ellipses" size={16} color={COLORS.accent} />
+              </View>
+              <Text style={[styles.cardTitle, { marginBottom: 0, flex: 1 }]}>Messages from GoRide</Text>
+            </View>
+            {messages.map((msg, idx) => (
+              <View
+                key={msg.id}
+                style={{
+                  backgroundColor: COLORS.cardElevated,
+                  borderRadius: 14,
+                  padding: 14,
+                  marginBottom: idx < messages.length - 1 ? 10 : 0,
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  borderTopLeftRadius: 4,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.accent, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="logo-dribbble" size={12} color={COLORS.bg} />
+                  </View>
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: COLORS.accent }}>GoRide</Text>
+                  <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: COLORS.textMuted, marginLeft: "auto" }}>
+                    {fmtTs(msg.createdAt)}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: COLORS.text, lineHeight: 20 }}>
+                  {msg.body}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* SOS — only when actively in progress */}
         {isInProgress && (
