@@ -58,9 +58,6 @@ export default function RootIndex() {
           <GRMark size={72} />
           <View style={{ alignItems: "center", marginTop: 20 }}>
             <Text style={styles.logoText}>GoRide</Text>
-            <Text style={styles.tagline}>
-              Go Further<Text style={{ color: COLORS.gold }}>.</Text>
-            </Text>
           </View>
           <ActivityIndicator color={COLORS.accent} style={{ marginTop: 44 }} />
         </View>

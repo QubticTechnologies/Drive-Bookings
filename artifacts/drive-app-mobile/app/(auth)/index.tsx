@@ -186,9 +186,6 @@ export default function AuthWelcome() {
 
         <View style={{ marginTop: 18, marginBottom: 4 }}>
           <Text style={styles.brandName}>GoRide</Text>
-          <Text style={styles.tagline}>
-            Go Further<Text style={{ color: COLORS.gold }}>.</Text>
-          </Text>
         </View>
 
         <View style={styles.heroBadge}>

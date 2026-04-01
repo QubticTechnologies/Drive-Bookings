@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
-import { MapPin, Navigation, Car, Star, Phone, FileText } from "lucide-react";
+import { MapPin, Navigation, Car, Star, Phone, FileText, User, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGetRide } from "@workspace/api-client-react";
 import { Layout } from "@/components/Layout";
@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useSession } from "@/store/use-session";
 import { formatCurrency } from "@/lib/utils";
+
+function calcEtaMin(acceptedAt: string | null | undefined): number | null {
+  if (!acceptedAt) return null;
+  const elapsed = (Date.now() - new Date(acceptedAt).getTime()) / 60000;
+  const eta = Math.round(Math.max(0, 10 - elapsed));
+  return elapsed < 15 ? eta : null;
+}
 
 export default function ClientRideTracker() {
   const { id } = useParams();
@@ -90,12 +97,12 @@ export default function ClientRideTracker() {
           <Card>
             <h3 className="font-semibold text-lg mb-6 border-b border-border pb-4">Your Driver</h3>
             {ride.driver ? (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center border border-white/10">
                     <User className="w-8 h-8 text-muted-foreground" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="text-xl font-bold">{ride.driver.name}</div>
                     <div className="flex items-center gap-1 text-primary text-sm mt-1">
                       <Star className="w-4 h-4 fill-current" />
@@ -104,7 +111,19 @@ export default function ClientRideTracker() {
                     </div>
                   </div>
                 </div>
-                
+
+                {ride.status === 'accepted' && (() => {
+                  const eta = calcEtaMin((ride as any).acceptedAt);
+                  return (
+                    <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
+                      <Clock className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm font-medium">
+                        {eta !== null && eta > 1 ? `Driver arriving in ~${eta} min` : eta === 0 || eta === 1 ? 'Driver arriving soon!' : 'Driver is at your pickup point'}
+                      </span>
+                    </div>
+                  );
+                })()}
+
                 <div className="bg-secondary/40 p-4 rounded-xl border border-white/5 flex justify-between items-center">
                   <div>
                     <div className="font-display font-bold text-lg">{ride.driver.vehiclePlate}</div>
@@ -114,6 +133,18 @@ export default function ClientRideTracker() {
                     <Car className="w-6 h-6" />
                   </div>
                 </div>
+
+                {ride.driver.phone && (
+                  <a href={`tel:${ride.driver.phone}`} className="flex items-center gap-3 w-full bg-secondary/40 hover:bg-secondary/70 transition-colors p-4 rounded-xl border border-white/5">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center border border-primary/20">
+                      <Phone className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Call Driver</div>
+                      <div className="font-medium">{ride.driver.phone}</div>
+                    </div>
+                  </a>
+                )}
               </div>
             ) : (
               <div className="py-8 text-center text-muted-foreground flex flex-col items-center">

@@ -264,7 +264,7 @@ with col_logo:
   </span>
   <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;">GoRide</span>
 </span>
-<br><span style="font-size:12px;color:#6b9aa2;letter-spacing:0.3px;">Go Further<span style="color:#FFC72C;">.</span></span>
+
 """, unsafe_allow_html=True)
 with col_mode:
     if st.session_state.mode == "driver":
@@ -295,7 +295,6 @@ st.divider()
 def page_home():
     st.markdown("""
 <h1 style="font-size:2.4rem;font-weight:800;letter-spacing:-1px;margin-bottom:4px;">
-  Go Further<span style="color:#FFC72C;">.</span>
 </h1>
 <p style="font-size:1.05rem;color:#6b9aa2;margin-top:0;">Nassau's premier ride-hailing platform &mdash; <span style="color:#00C2D4;">safe</span>, <span style="color:#FFC72C;">fast</span>, transparent.</p>
 """, unsafe_allow_html=True)
@@ -812,7 +811,7 @@ def _location_picker(key_prefix: str, label: str, allow_gps: bool = True):
 
                 # Address + landmark info
                 near_dist_str = (f"{near_dist:.0f} m" if near_dist < 1000
-                                 else f"{near_dist/1000:.1f} km")
+                                 else f"{db.km_to_mi(near_dist/1000):.1f} mi")
                 st.markdown(
                     f"📍 **Detected address:** {addr}  \n"
                     f"📌 **Nearest landmark:** {near_name} — {near_dist_str} away  \n"
@@ -1015,14 +1014,14 @@ def page_client_book():
             if ri:
                 dist = ri["distance_km"]
                 fare = db.calc_fare(dist)
-                st.metric("🗺 Road Distance", f"{dist:.1f} km")
+                st.metric("🗺 Road Distance", f"{db.km_to_mi(dist):.1f} mi")
                 st.metric("⏱ Est. Drive", f"{ri['duration_min']:.0f} min")
                 st.metric("💵 Est. Fare", db.fmt_usd(fare))
                 st.caption("Via OSRM road routing · Final fare at drop-off")
             else:
                 dist = db.haversine(p_lat, p_lng, d_lat, d_lng)
                 fare = db.calc_fare(dist)
-                st.metric("📏 Distance", f"{dist:.1f} km")
+                st.metric("📏 Distance", f"{db.km_to_mi(dist):.1f} mi")
                 st.metric("💵 Est. Fare", db.fmt_usd(fare))
                 st.caption("Straight-line fallback")
             st.write("")
@@ -1106,7 +1105,7 @@ def page_client_book():
             st.session_state.client_phone = client_phone.strip()
             st.session_state.ride_id = ride["id"]
             st.session_state.route_info = None
-            st.success(f"Ride requested! {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+            st.success(f"Ride requested! {db.fmt_usd(ride['estimated_fare'])} · {db.km_to_mi(ride['distance_km']):.1f} mi")
             time.sleep(1)
             nav("client_track")
 
@@ -1173,7 +1172,7 @@ def page_client_track():
     with col1:
         st.metric("Status", f"{icon} {label}")
         st.metric("Estimated Fare", db.fmt_usd(ride["estimated_fare"]))
-        st.metric("Distance", f"{ride['distance_km']:.1f} km")
+        st.metric("Distance", f"{db.km_to_mi(ride['distance_km']):.1f} mi")
         if ride.get("scheduled_at"):
             sched = ride["scheduled_at"]
             now   = datetime.utcnow()
@@ -1189,6 +1188,18 @@ def page_client_track():
         if ride["driver_name"]:
             st.markdown(f"🚗 **Driver:** {ride['driver_name']}")
             st.markdown(f"🔖 **Plate:** {ride['driver_plate']}")
+            if ride.get("driver_phone"):
+                st.markdown(f"📞 **Phone:** {ride['driver_phone']}")
+            if ride["status"] == "accepted" and ride.get("accepted_at"):
+                from datetime import datetime as _dt
+                elapsed = (_dt.utcnow() - ride["accepted_at"]).total_seconds() / 60
+                eta_min = max(0, int(10 - elapsed))
+                if eta_min > 1:
+                    st.metric("⏱ ETA", f"~{eta_min} min")
+                elif elapsed < 12:
+                    st.info("🚗 Driver is arriving soon!")
+                else:
+                    st.info("🚗 Driver should be at your pickup point.")
 
     with col2:
         st.info(msg)
@@ -1353,7 +1364,7 @@ def page_driver_dashboard():
             st.markdown("### 🚀 Active Ride")
             st.markdown(f"**Status:** `{current_ride['status'].replace('_', ' ').upper()}`")
             st.markdown(f"**Client:** {current_ride['client_name']} · {current_ride['client_phone']}")
-            st.markdown(f"**Fare:** {db.fmt_usd(current_ride['estimated_fare'])}  ·  {current_ride['distance_km']:.1f} km")
+            st.markdown(f"**Fare:** {db.fmt_usd(current_ride['estimated_fare'])}  ·  {db.km_to_mi(current_ride['distance_km']):.1f} mi")
 
             c1, c2 = st.columns(2)
             with c1:
@@ -1387,7 +1398,7 @@ def page_driver_dashboard():
                     with st.container(border=True):
                         c1, c2 = st.columns([3, 1])
                         with c1:
-                            st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}**  ·  {ride['distance_km']:.1f} km  ·  {ride['client_name']}")
+                            st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}**  ·  {db.km_to_mi(ride['distance_km']):.1f} mi  ·  {ride['client_name']}")
                             st.caption(f"📍 {ride['pickup_location']}")
                             st.caption(f"🏁 {ride['dropoff_location']}")
                         with c2:
@@ -1527,7 +1538,7 @@ def _dispatch_panel(pending, scheduled, active, available_drivers):
                 st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
                 st.caption(f"📍 {ride['pickup_location']}")
                 st.caption(f"🏁 {ride['dropoff_location']}")
-                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km")
+                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {db.km_to_mi(ride['distance_km']):.1f} mi")
                 if available_drivers:
                     opts = {f"{d['name']} — {d['vehicle_plate']}": d["id"] for d in available_drivers}
                     lbl = st.selectbox("Assign driver", list(opts.keys()), key=f"ss_{ride['id']}")
@@ -1547,7 +1558,7 @@ def _dispatch_panel(pending, scheduled, active, available_drivers):
             with st.container(border=True):
                 created = ride["created_at"]
                 ts = created.strftime("%H:%M") if isinstance(created, datetime) else ""
-                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km · {ts}")
+                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {db.km_to_mi(ride['distance_km']):.1f} mi · {ts}")
                 st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
                 st.caption(f"📍 {ride['pickup_location']}")
                 st.caption(f"🏁 {ride['dropoff_location']}")
@@ -1570,7 +1581,7 @@ def _dispatch_panel(pending, scheduled, active, available_drivers):
             with st.container(border=True):
                 badge = "🚀 **IN PROGRESS**" if ride["status"] == "in_progress" else "🚗 **ACCEPTED**"
                 st.markdown(badge)
-                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {ride['distance_km']:.1f} km")
+                st.markdown(f"**{db.fmt_usd(ride['estimated_fare'])}** · {db.km_to_mi(ride['distance_km']):.1f} mi")
                 st.caption(f"👤 {ride['client_name']} · {ride['client_phone']}")
                 st.caption(f"📍 {ride['pickup_location']}")
                 st.caption(f"🏁 {ride['dropoff_location']}")
@@ -1593,7 +1604,7 @@ def _dispatch_panel(pending, scheduled, active, available_drivers):
                             "pickup": ride["pickup_location"],
                             "dropoff": ride["dropoff_location"],
                             "fare": db.fmt_usd(ride["estimated_fare"]),
-                            "distance": f"{ride['distance_km']:.1f}",
+                            "distance": f"{db.km_to_mi(ride['distance_km']):.1f}",
                             "duration": dur,
                         }
                         st.rerun()
@@ -1764,7 +1775,7 @@ def _admin_live_ops(drivers, all_rides):
                                     "pickup": ride["pickup_location"],
                                     "dropoff": ride["dropoff_location"],
                                     "fare": db.fmt_usd(ride["estimated_fare"]),
-                                    "distance": f"{ride['distance_km']:.1f}",
+                                    "distance": f"{db.km_to_mi(ride['distance_km']):.1f}",
                                     "duration": dur,
                                 }
                                 st.rerun()
@@ -1938,7 +1949,7 @@ def _ride_detail(ride, key_prefix):
                 f"Distance fare: **{db.fmt_usd(bill['distance_fare'])}**  \n"
                 f"—  \n"
                 f"**Total: {db.fmt_usd(bill['total_fare'])}**  \n"
-                f"Distance: {bill['distance_km']:.2f} km  \n"
+                f"Distance: {db.km_to_mi(bill['distance_km']):.2f} mi  \n"
                 f"Currency: {bill['currency']}  \n"
                 f"Bill status: `{bill['status'].upper()}`"
             )
@@ -1946,7 +1957,7 @@ def _ride_detail(ride, key_prefix):
             st.markdown(
                 f"Estimated fare: **{db.fmt_usd(estimated)}**  \n"
                 f"Final fare: **{db.fmt_usd(final)}**  \n"
-                f"Distance: {float(ride.get('distance_km') or 0):.2f} km  \n"
+                f"Distance: {db.km_to_mi(float(ride.get('distance_km') or 0)):.2f} mi  \n"
                 f"_(No bill generated yet)_"
             )
 
@@ -2078,7 +2089,7 @@ def _ride_detail(ride, key_prefix):
             f"Driver:      {ride.get('driver_name') or '—'} ({ride.get('driver_plate') or '—'})\n"
             f"Pickup:      {ride['pickup_location']}\n"
             f"Dropoff:     {ride['dropoff_location']}\n"
-            f"Distance:    {float(ride.get('distance_km') or 0):.2f} km\n"
+            f"Distance:    {db.km_to_mi(float(ride.get('distance_km') or 0)):.2f} mi\n"
             f"Fare:        {db.fmt_usd(fare)}\n"
             f"Requested:   {ride['created_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('created_at') else '—'}\n"
             f"Accepted:    {ride['accepted_at'].strftime('%Y-%m-%d %H:%M:%S') if ride.get('accepted_at') else '—'}\n"
@@ -2179,7 +2190,7 @@ def _admin_rides(all_rides, drivers):
                     f"📍 **{ride['pickup_location']}** &nbsp;→&nbsp; "
                     f"🏁 **{ride['dropoff_location']}**  \n"
                     f"💵 {fare} &nbsp;·&nbsp; 💳 {pay_method} &nbsp;·&nbsp; "
-                    f"{float(ride.get('distance_km') or 0):.1f} km"
+                    f"{db.km_to_mi(float(ride.get('distance_km') or 0)):.1f} mi"
                     + (f" &nbsp;·&nbsp; ✅ {comp_ts}" if ride["status"] == "completed" else "")
                     + (f" &nbsp;·&nbsp; 📞 {ride.get('client_phone','')}" if ride.get("client_phone") else "")
                 )
@@ -2407,7 +2418,7 @@ def _release_checklist(drivers, all_rides):
             assert abs(ride["estimated_fare"] - expected_fare) < 0.01, \
                 f"Fare mismatch: got {ride['estimated_fare']}, expected {expected_fare}"
             st.session_state["test_ride_id"] = ride["id"]
-            return (f"Ride #{ride['id']} created · {ride['distance_km']:.1f} km · "
+            return (f"Ride #{ride['id']} created · {db.km_to_mi(ride['distance_km']):.1f} mi · "
                     f"Fare: {db.fmt_usd(ride['estimated_fare'])} ✓")
 
         _test_row("ride_create", "Create Ride",
@@ -2753,7 +2764,7 @@ def _admin_settings(all_rides, drivers):
                     notes="[TEST RIDE — admin generated]",
                 )
                 if ride:
-                    st.success(f"✅ Ride #{ride['id']} — {db.fmt_usd(ride['estimated_fare'])} · {ride['distance_km']:.1f} km")
+                    st.success(f"✅ Ride #{ride['id']} — {db.fmt_usd(ride['estimated_fare'])} · {db.km_to_mi(ride['distance_km']):.1f} mi")
                     st.rerun()
 
         st.divider()

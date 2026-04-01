@@ -8,6 +8,14 @@ from datetime import datetime
 
 BASE_FARE = 3.0
 PER_KM = 1.50
+
+def km_to_mi(km):
+    """Convert kilometres to miles for display (Bahamas uses imperial)."""
+    if km is None:
+        return 0.0
+    return round(float(km) * 0.621371, 2)
+
+
 NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 OSRM_URL = "http://router.project-osrm.org/route/v1/driving"
 HEADERS = {"User-Agent": "GoRide-Nassau/1.0 (contact@goride.bs)"}
@@ -243,7 +251,8 @@ def get_all_rides():
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT r.*, d.name as driver_name, d.vehicle_plate as driver_plate
+                SELECT r.*, d.name as driver_name, d.vehicle_plate as driver_plate,
+                       d.phone as driver_phone, d.vehicle_make, d.vehicle_model, d.vehicle_color
                 FROM rides r
                 LEFT JOIN drivers d ON r.driver_id = d.id
                 ORDER BY r.id DESC
@@ -255,7 +264,8 @@ def get_ride(ride_id: int):
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT r.*, d.name as driver_name, d.vehicle_plate as driver_plate
+                SELECT r.*, d.name as driver_name, d.vehicle_plate as driver_plate,
+                       d.phone as driver_phone, d.vehicle_make, d.vehicle_model, d.vehicle_color
                 FROM rides r
                 LEFT JOIN drivers d ON r.driver_id = d.id
                 WHERE r.id = %s
