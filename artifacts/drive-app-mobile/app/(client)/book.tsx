@@ -526,10 +526,12 @@ const pickerStyles = StyleSheet.create({
 // ── Book Screen ───────────────────────────────────────────────────────────────
 export default function BookScreen() {
   const insets = useSafeAreaInsets();
-  const { setActiveRideId } = useApp();
+  const { setActiveRideId, role, guestName, riderUser } = useApp();
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const riderFullName = riderUser ? [riderUser.firstName, riderUser.lastName].filter(Boolean).join(" ") : "";
+  const [name, setName] = useState(riderFullName || guestName || "");
+  const [phone, setPhone] = useState(riderUser?.phoneNumber ?? "");
+  const [formError, setFormError] = useState("");
   const [pickup, setPickup] = useState<Place | null>(null);
   const [dropoff, setDropoff] = useState<Place | null>(null);
   const [notes, setNotes] = useState("");
@@ -554,7 +556,11 @@ export default function BookScreen() {
   });
 
   const handleBook = () => {
-    if (!name || !phone || !pickup || !dropoff) return;
+    if (!name.trim()) { setFormError("Please enter your name."); return; }
+    if (!phone.trim()) { setFormError("Please enter your phone number."); return; }
+    if (!pickup) { setFormError("Please select a pickup location."); return; }
+    if (!dropoff) { setFormError("Please select a drop-off location."); return; }
+    setFormError("");
     let scheduledAt: string | undefined;
     if (bookMode === "later") {
       if (!schedDate || !schedTime) return;
@@ -781,17 +787,22 @@ export default function BookScreen() {
 
         {/* Book button */}
         <View style={[styles.bookBar, { paddingBottom: botPad + 12 }]}>
+          {!!formError && (
+            <View style={{ backgroundColor: "#ff4d4f22", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, borderWidth: 1, borderColor: "#ff4d4f55" }}>
+              <Text style={{ color: "#ff6b6b", fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center" }}>{formError}</Text>
+            </View>
+          )}
           <Pressable
-            style={[styles.bookBtn, !canBook && styles.bookBtnDisabled]}
+            style={[styles.bookBtn, isPending && styles.bookBtnDisabled]}
             onPress={handleBook}
-            disabled={!canBook}
+            disabled={isPending}
           >
             <Ionicons
               name={bookMode === "later" ? "calendar" : "car-sport"}
               size={20}
-              color={canBook ? COLORS.bg : COLORS.textMuted}
+              color={isPending ? COLORS.textMuted : COLORS.bg}
             />
-            <Text style={[styles.bookBtnText, !canBook && { color: COLORS.textMuted }]}>
+            <Text style={[styles.bookBtnText, isPending && { color: COLORS.textMuted }]}>
               {isPending ? "Requesting…" : bookMode === "later" ? "Confirm Scheduled Ride" : "Request Ride Now"}
             </Text>
           </Pressable>
