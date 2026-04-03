@@ -648,7 +648,7 @@ export default function BookScreen() {
               <Feather name="user" size={16} color={COLORS.textSub} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Full name"
+                placeholder="e.g. Sarah Brown"
                 placeholderTextColor={COLORS.textMuted}
                 value={name}
                 onChangeText={setName}
@@ -658,7 +658,7 @@ export default function BookScreen() {
               <Feather name="phone" size={16} color={COLORS.textSub} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="+1 (242) 555-0100"
+                placeholder="e.g. +1 (242) 555-0100"
                 placeholderTextColor={COLORS.textMuted}
                 keyboardType="phone-pad"
                 value={phone}
@@ -763,7 +763,7 @@ export default function BookScreen() {
               <View style={{ marginTop: 12, gap: 10 }}>
                 <TextInput
                   style={styles.inputRow}
-                  placeholder="Date — YYYY-MM-DD"
+                  placeholder="e.g. 2025-12-25"
                   placeholderTextColor={COLORS.textMuted}
                   value={schedDate}
                   onChangeText={setSchedDate}

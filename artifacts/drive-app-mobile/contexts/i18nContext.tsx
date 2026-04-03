@@ -43,7 +43,7 @@ const EN = {
   guestTitle: "Quick Start",
   guestSubtitle: "Jump straight in — no account needed.\nYou can create one later.",
   yourName: "Your name (optional)",
-  namePlaceholder: "E.g. James or Tourist",
+  namePlaceholder: "e.g. Sarah Brown",
   continueNow: "Continue Now",
   // Common
   back: "Back",
